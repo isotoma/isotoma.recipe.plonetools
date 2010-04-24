@@ -45,7 +45,9 @@ class Recipe(object):
         self.post_extras = options.get('post-extras', "").split()
         self.pre_extras = options.get('pre-extras', "").split()
         options['args'] = self.createArgs()
-        
+
+        self.stop_zeo = False
+
         # We can disable the starting of zope and zeo.  useful from the
         # command line:
         # $ bin/buildout -v plonesite:enabled=false
@@ -72,6 +74,31 @@ class Recipe(object):
         self.before_install = options.get('before-install')
         self.after_install = options.get('after-install')
 
+    def is_zeo_started(self):
+        # Is there a PID file?
+        pid_file = self.options["zeo-pid-file"]
+        if not os.path.exists(pid_file):
+            return False
+
+        pid = open(pid_file).read().strip()
+        if not pid.isdigit():
+            # There is a PID file but its broken
+            return False
+
+        pid = int(pid)
+
+        # Try kill() with signal 0 - this will tell us if the zeoserver is running
+        #  Special case
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError, e:
+            # We don't have permissions to poke this process, probably should give up
+            if e.errno == 3:
+                raise UserError("We don't have permission to check the status of that zeoserver")
+
+        return False
+
     def install(self):
         """
         1. Run the before-install command if specified
@@ -87,10 +114,11 @@ class Recipe(object):
 
             if self.before_install:
                 system(self.before_install)
-            if self.zeoserver:
+            if not self.is_zeo_started() and self.zeoserver:
                 zeo_cmd = "%(bin-directory)s/%(zeo-script)s" % options
                 zeo_start = "%s start" % zeo_cmd
                 subprocess.call(zeo_start.split())
+                self.stop_zeo = True
 
             # XXX This seems wrong...
             options['script'] = pkg_resources.resource_filename(__name__, 'plonesite.py')
@@ -100,7 +128,7 @@ class Recipe(object):
             if result > 0:
                 raise UserError("Plone script could not complete")
 
-            if self.zeoserver:
+            if self.stop_zeo:
                 zeo_stop = "%s stop" % zeo_cmd
                 subprocess.call(zeo_stop.split())
             if self.after_install:
