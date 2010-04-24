@@ -120,17 +120,18 @@ class Recipe(object):
                 subprocess.call(zeo_start.split())
                 self.stop_zeo = True
 
-            # XXX This seems wrong...
-            options['script'] = pkg_resources.resource_filename(__name__, 'plonesite.py')
-            # run the script
-            cmd = "%(bin-directory)s/%(instance-script)s run %(script)s %(args)s" % options
-            result = subprocess.call(cmd.split())
-            if result > 0:
-                raise UserError("Plone script could not complete")
-
-            if self.stop_zeo:
-                zeo_stop = "%s stop" % zeo_cmd
-                subprocess.call(zeo_stop.split())
+            try:
+                # XXX This seems wrong...
+                options['script'] = pkg_resources.resource_filename(__name__, 'plonesite.py')
+                # run the script
+                cmd = "%(bin-directory)s/%(instance-script)s run %(script)s %(args)s" % options
+                result = subprocess.call(cmd.split())
+                if result > 0:
+                    raise UserError("Plone script could not complete")
+            finally:
+                if self.stop_zeo:
+                    zeo_stop = "%s stop" % zeo_cmd
+                    subprocess.call(zeo_stop.split())
             if self.after_install:
                 system(self.after_install)
 
