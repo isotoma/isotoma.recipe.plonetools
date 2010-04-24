@@ -1,0 +1,9 @@
+
+0.1 (2010-04-24)
+================
+
+- Created friendly fork of collective.recipe.plonesite
+- Catch non-zero exit codes 
+- Added a test to see if zeo is running before starting it
+- Only shutdown zeo if we started it
+
