@@ -30,29 +30,15 @@ class Recipe(object):
             buildout['buildout']['parts-directory'],
             self.name,
             )
-        # suppress script generation.
-        self.options['scripts'] = ''
-        options['bin-directory'] = buildout['buildout']['bin-directory']
-        
-        # all the options that will be passed on to the 'run' script
-        self.site_id = options.get('site-id', 'Plone')
-        self.site_replace = options.get('site-replace', '').lower() in TRUISMS
-        self.admin_user = options.get('admin-user', 'admin')
-        self.products_initial = options.get('products-initial', "").split()
-        self.profiles_initial = options.get('profiles-initial', "").split()
-        self.products = options.get('products', "").split()
-        self.profiles = options.get('profiles', "").split()
-        self.post_extras = options.get('post-extras', "").split()
-        self.pre_extras = options.get('pre-extras', "").split()
-        options['args'] = self.createArgs()
 
         self.stop_zeo = False
+        self.bin_directory = buildout['buildout']['bin-directory']
 
         # We can disable the starting of zope and zeo.  useful from the
         # command line:
         # $ bin/buildout -v plonesite:enabled=false
         self.enabled = options.get('enabled', 'true').lower() in TRUISMS
-        
+
         # figure out if we need a zeo server started, and if it's on windows
         # this code was borrowed from plone.recipe.runscript
         is_win = sys.platform[:3].lower() == "win"
@@ -62,7 +48,8 @@ class Recipe(object):
         instance_script = os.path.basename(instance_home)
         if is_win:
             instance_script = "%s.exe" % instance_script
-        options['instance-script'] = instance_script
+        self.instance_script = instance_script
+
         self.zeoserver = options.get('zeoserver', False)
         if self.zeoserver:
             if is_win:
@@ -70,9 +57,8 @@ class Recipe(object):
             else:
                 zeo_home = buildout[self.zeoserver]['location']
                 zeo_script = os.path.basename(zeo_home)
-            options['zeo-script'] = zeo_script
-        self.before_install = options.get('before-install')
-        self.after_install = options.get('after-install')
+
+            self.zeo_script = os.path.join(self.bin_directory, zeo_script)
 
     def is_zeo_started(self):
         # Is there a PID file?
@@ -87,13 +73,13 @@ class Recipe(object):
 
         pid = int(pid)
 
-        # Try kill() with signal 0 - this will tell us if the zeoserver is running
-        #  Special case
+        # Try kill() with signal 0
+        # No exceptions means the zeoserver is running
+        #  Special case: if we dont have permissions, give up
         try:
             os.kill(pid, 0)
             return True
         except OSError, e:
-            # We don't have permissions to poke this process, probably should give up
             if e.errno == 3:
                 raise UserError("We don't have permission to check the status of that zeoserver")
 
@@ -112,52 +98,87 @@ class Recipe(object):
         location = options['location']
         if self.enabled:
 
-            if self.before_install:
-                system(self.before_install)
             if not self.is_zeo_started() and self.zeoserver:
-                zeo_cmd = "%(bin-directory)s/%(zeo-script)s" % options
-                zeo_start = "%s start" % zeo_cmd
+                zeo_start = "%s start" % self.zeo_script
                 subprocess.call(zeo_start.split())
                 self.stop_zeo = True
 
             try:
-                # XXX This seems wrong...
-                options['script'] = pkg_resources.resource_filename(__name__, 'plonesite.py')
+                # work out what to run
+                cmd = "%(bin-directory)s/%(instance-script)s run %(command)s" % {
+                    "bin-directory": self.bin_directory,
+                    "instance-script": self.instance_script,
+                    "command": self.get_command()
+                    }
+                print cmd
                 # run the script
-                cmd = "%(bin-directory)s/%(instance-script)s run %(script)s %(args)s" % options
                 result = subprocess.call(cmd.split())
                 if result > 0:
                     raise UserError("Plone script could not complete")
             finally:
                 if self.stop_zeo:
-                    zeo_stop = "%s stop" % zeo_cmd
+                    zeo_stop = "%s stop" % self.zeo_script
                     subprocess.call(zeo_stop.split())
-            if self.after_install:
-                system(self.after_install)
 
         return location
+
+    def get_internal_script(self, scriptname):
+        return pkg_resources.resource_filename(__name__, scriptname)
 
     def update(self):
         """Updater"""
         self.install()
 
-    def createArgs(self):
-        """Helper method to create an argument list
-        """
+
+class Site(Recipe):
+
+    def install(self):
+        before_install = self.options.get("before-install", None)
+        if before_install:
+           system(before_install)
+
+        super(Site, self).install()
+
+        after_install = self.options.get("after-install", None)
+        if after_install:
+            system(after_install)
+
+    def get_command(self):
+        o = self.options.get
+
         args = []
-        args.append("--site-id=%s" % self.site_id)
+        args.append("--site-id=%s" % o("site-id", "Plone"))
         # only pass the site replace option if it's True
-        if self.site_replace:
+        if o('site-replace', '') in TRUISMS:
             args.append("--site-replace")
-        args.append("--admin-user=%s" % self.admin_user)
+        args.append("--admin-user=%s" % o("admin-user", "admin"))
+
         def createArgList(arg_name, arg_list):
             if arg_list:
                 for arg in arg_list:
                     args.append("%s=%s" % (arg_name, arg))
-        createArgList('--pre-extras', self.pre_extras)
-        createArgList('--post-extras', self.post_extras)
-        createArgList('--products-initial', self.products_initial)
-        createArgList('--products', self.products)
-        createArgList('--profiles-initial', self.profiles_initial)
-        createArgList('--profiles', self.profiles)
-        return " ".join(args)
+
+        createArgList('--pre-extras', o("pre-extras", "").split())
+        createArgList('--post-extras', o("post-extras", "").split())
+        createArgList('--products-initial', o("products-initial", "").split())
+        createArgList('--products', o("products", "").split())
+        createArgList('--profiles-initial', o("profiles-initial", "").split())
+        createArgList('--profiles', o("profiles", "").split())
+
+        return "%(scriptname)s %(args)s" % {
+            "scriptname": self.get_internal_script("plonesite.py"),
+            "args": " ".join(args)
+            }
+
+
+class Properties(Recipe):
+
+    def get_command(self):
+        raise NotImplementedError
+
+
+class Script(Recipe):
+
+    def get_command(self):
+        raise NotImplementedError
+

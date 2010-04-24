@@ -32,7 +32,10 @@ setup(
     ],
     entry_points = {
         "zc.buildout": [
-            "default = isotoma.recipe.plonetools:Recipe",
+            "default = isotoma.recipe.plonetools:Site",
+            "site = isotoma.recipe.plonetools:Site",
+            "properties = isotoma.recipe.plonetools:Properties",
+            "script = isotoma.recipe.plonetools:Script"
         ],
     }
 )
