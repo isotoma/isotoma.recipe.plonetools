@@ -6,6 +6,7 @@ import sys
 import subprocess
 import pkg_resources
 from zc.buildout import UserError
+import simplejson as json
 
 TRUISMS = [
     'yes',
@@ -31,6 +32,7 @@ class Recipe(object):
             self.name,
             )
 
+        self.installed = []
         self.stop_zeo = False
         self.bin_directory = buildout['buildout']['bin-directory']
 
@@ -95,7 +97,7 @@ class Recipe(object):
         """
         options = self.options
         # XXX is this needed?
-        location = options['location']
+        self.installed.append(options['location'])
         if self.enabled:
 
             if not self.is_zeo_started() and self.zeoserver:
@@ -120,7 +122,7 @@ class Recipe(object):
                     zeo_stop = "%s stop" % self.zeo_script
                     subprocess.call(zeo_stop.split())
 
-        return location
+        return self.installed
 
     def get_internal_script(self, scriptname):
         return pkg_resources.resource_filename(__name__, scriptname)
@@ -142,6 +144,8 @@ class Site(Recipe):
         after_install = self.options.get("after-install", None)
         if after_install:
             system(after_install)
+
+        return self.installed
 
     def get_command(self):
         o = self.options.get
@@ -171,14 +175,93 @@ class Site(Recipe):
             }
 
 
+class OptionsProxy(object):
+
+    """
+    An object that wraps a Buildout config and makes it more pythonic
+
+    It means that we have real numbers, real bools, real lists and dicts...
+    """
+
+    def __init__(self, dict, blocked=None):
+        self.dict = dict
+        self.blocked = blocked or []
+
+    def __getitem__(self, key):
+        if not key in self.dict:
+            raise KeyError("Key '%s' not found" % key)
+        val = self.dict['key'].strip()
+        if val.isdigit():
+            return int(val)
+        elif val.lower() == "true":
+            return True
+        elif val.lower() == "false":
+            return False
+        elif val.startswith("{") or val.startswith("["):
+            return json.loads(val)
+        else:
+            return val
+
+    def iteritems(self):
+        for key in self.dict.iterkeys():
+            yield key, self[key]
+
+
 class Properties(Recipe):
 
+    """
+    This recipe writes all properties set on it into a .cfg in its part directory.
+    It then runs a script to process this file and insert them into a plonesite as
+    portal properties.
+    """
+
+    BLOCKED = ['recipe', 'script', 'instance', 'zeoserver', 'zeo-pid-file', 'location', 'site-id']
+
     def get_command(self):
-        raise NotImplementedError
+        location = os.path.join(self.buildout['buildout']['parts-directory'], self.name)
+        if not os.path.isdir(location):
+            os.makedirs(location)
+        location = os.path.join(location, "properties.cfg")
+
+        args = {}
+        for key, value in self.options.iteritems():
+            if key.startswith("_") or key in self.BLOCKED:
+                continue
+            args[key] = value
+        cfg = json.dumps(args)
+
+        open(location, "w").write(cfg)
+        self.installed.append(location)
+
+        return "%(scriptname)s %(args)s" % {
+            "scriptname": self.get_internal_script("setproperties.py"),
+            "args": "--site-id=%s --properties=%s" % (self.options['site-id'], location)
+            }
 
 
 class Script(Recipe):
 
+    """
+    The script recipe takes a 'script' parameter: this is the script it runs
+
+    Every other parameter is passed to the script in the form --key=val
+    """
+
+    BLOCKED = ['recipe', 'script', 'instance', 'zeoserver', 'zeo-pid-file', 'location']
+
     def get_command(self):
-        raise NotImplementedError
+        args = []
+        for key, value in self.options.iteritems():
+            if key.startswith("_") or key in self.BLOCKED:
+                continue
+            if isinstance(value, list):
+                for v in value:
+                    args.append("--%s=%s" % (key, value))
+            args.append("--%s=%s" % (key, value))
+
+        return "%(scriptname)s %(args)s" % {
+            "scriptname": self.options['script'],
+            "args": " ".join(args)
+            }
+
 
