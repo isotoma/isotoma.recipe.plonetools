@@ -60,7 +60,8 @@ class Recipe(object):
                 zeo_home = buildout[self.zeoserver]['location']
                 zeo_script = os.path.basename(zeo_home)
 
-            self.zeo_script = os.path.join(self.bin_directory, zeo_script)
+            options.setdefault("zeo-script", os.path.join(self.bin_directory, zeo_script))
+            options.setdefault("zeo-pid-file", os.path.join(buildout['buildout']['directory'], "var", "%s.pid" % self.zeoserver))
 
     def is_zeo_started(self):
         # Is there a PID file?
@@ -68,12 +69,12 @@ class Recipe(object):
         if not os.path.exists(pid_file):
             return False
 
+        # Read PID file, make sure its an int
         pid = open(pid_file).read().strip()
-        if not pid.isdigit():
-            # There is a PID file but its broken
+        try:
+            pid = int(pid)
+        except:
             return False
-
-        pid = int(pid)
 
         # Try kill() with signal 0
         # No exceptions means the zeoserver is running
@@ -95,13 +96,14 @@ class Recipe(object):
         4. Stop the zeoserver if specified
         5. Run the after-install command if specified
         """
-        options = self.options
+
         # XXX is this needed?
-        self.installed.append(options['location'])
+        self.installed.append(self.options['location'])
+
         if self.enabled:
 
             if not self.is_zeo_started() and self.zeoserver:
-                zeo_start = "%s start" % self.zeo_script
+                zeo_start = "%s start" % self.options["zeo-script"]
                 subprocess.call(zeo_start.split())
                 self.stop_zeo = True
 
@@ -113,13 +115,14 @@ class Recipe(object):
                     "command": self.get_command()
                     }
                 print cmd
+
                 # run the script
                 result = subprocess.call(cmd.split())
                 if result > 0:
                     raise UserError("Plone script could not complete")
             finally:
                 if self.stop_zeo:
-                    zeo_stop = "%s stop" % self.zeo_script
+                    zeo_stop = "%s stop" % self.options["zeo-script"]
                     subprocess.call(zeo_stop.split())
 
         return self.installed
@@ -153,7 +156,7 @@ class Site(Recipe):
         args = []
         args.append("--site-id=%s" % o("site-id", "Plone"))
         # only pass the site replace option if it's True
-        if o('site-replace', '') in TRUISMS:
+        if o('site-replace', '').lower() in TRUISMS:
             args.append("--site-replace")
         args.append("--admin-user=%s" % o("admin-user", "admin"))
 
@@ -175,38 +178,6 @@ class Site(Recipe):
             }
 
 
-class OptionsProxy(object):
-
-    """
-    An object that wraps a Buildout config and makes it more pythonic
-
-    It means that we have real numbers, real bools, real lists and dicts...
-    """
-
-    def __init__(self, dict, blocked=None):
-        self.dict = dict
-        self.blocked = blocked or []
-
-    def __getitem__(self, key):
-        if not key in self.dict:
-            raise KeyError("Key '%s' not found" % key)
-        val = self.dict['key'].strip()
-        if val.isdigit():
-            return int(val)
-        elif val.lower() == "true":
-            return True
-        elif val.lower() == "false":
-            return False
-        elif val.startswith("{") or val.startswith("["):
-            return json.loads(val)
-        else:
-            return val
-
-    def iteritems(self):
-        for key in self.dict.iterkeys():
-            yield key, self[key]
-
-
 class Properties(Recipe):
 
     """
@@ -215,22 +186,13 @@ class Properties(Recipe):
     portal properties.
     """
 
-    BLOCKED = ['recipe', 'script', 'instance', 'zeoserver', 'zeo-pid-file', 'location', 'site-id']
-
     def get_command(self):
         location = os.path.join(self.buildout['buildout']['parts-directory'], self.name)
         if not os.path.isdir(location):
             os.makedirs(location)
         location = os.path.join(location, "properties.cfg")
 
-        args = {}
-        for key, value in self.options.iteritems():
-            if key.startswith("_") or key in self.BLOCKED:
-                continue
-            args[key] = value
-        cfg = json.dumps(args)
-
-        open(location, "w").write(cfg)
+        open(location, "w").write(self.options.get("properties", "{}"))
         self.installed.append(location)
 
         return "%(scriptname)s %(args)s" % {
@@ -242,26 +204,11 @@ class Properties(Recipe):
 class Script(Recipe):
 
     """
-    The script recipe takes a 'script' parameter: this is the script it runs
-
-    Every other parameter is passed to the script in the form --key=val
+    The script recipe takes a 'command' parameter: this is what to tell the
+    instance script to run
     """
 
-    BLOCKED = ['recipe', 'script', 'instance', 'zeoserver', 'zeo-pid-file', 'location']
-
     def get_command(self):
-        args = []
-        for key, value in self.options.iteritems():
-            if key.startswith("_") or key in self.BLOCKED:
-                continue
-            if isinstance(value, list):
-                for v in value:
-                    args.append("--%s=%s" % (key, value))
-            args.append("--%s=%s" % (key, value))
-
-        return "%(scriptname)s %(args)s" % {
-            "scriptname": self.options['script'],
-            "args": " ".join(args)
-            }
+        return self.options["command"]
 
 
