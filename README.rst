@@ -1,12 +1,28 @@
 Introduction
 ============
 
+This recipe is based on `collective.recipe.plonesite`_. It provides recipes for creating and updating Plone sites, running scripts against Plone sites and for setting their properties. If you use zeoserver, all the recipes will start and stop zeo appropriately (not stopping it if it wasnt the process that started it, for example). When combined with `isotoma.recipe.zope2instance` it can properly deal with errors, ending the buildout run rather than continuing and succeeding.
+
+.. _`collective.recipe.plonesite`: http://pypi.python.org/pypi/collective.recipe.plonesite
+.. _`isotoma.recipe.zope2instance`: http://pypi.python.org/pypi/isotoma.recipe.zope2instance
+
+
+Managing plone sites
+====================
+
 This recipe enables you to create and update a Plone site as part of a buildout run.  This recipe only aims to run profiles and Quickinstall products.  It is assumed that the install methods, setuphandlers, upgrade steps, and other recipes will handle the rest of the work.
 
-NOTE: There is a friendly fork of http://pypi.python.org/pypi/collective.recipe.plonesite
+To use it, add something like this to your recipe::
 
-Options
-=======
+    [plonesite]
+    recipe = isotoma.recipe.plonetools:site
+    products =
+        LinguaPlone
+        iw.fss
+        you.YourProduct
+
+Parameters
+----------
 
 .. [1] Profiles have the following format: ``<package_name>:<profile>`` (e.g. ``my.package:default``).  The profile can also be prepended with the ``profile-`` if you so choose (e.g. ``profile-my.package:default``).
 
@@ -47,7 +63,7 @@ site-replace
 
 enabled
     Option to start up the instance/zeoserver.  Default: true.  This can be a useful option from the command line if you do not want to start up Zope, but still want to run the complete buildout.
-    
+
     $ bin/buildout -Nv plonesite:enabled=false
 
 pre-extras
@@ -55,4 +71,44 @@ pre-extras
 
 post-extras
     An absolute path to a file with python code that will be evaluated after running Quickinstaller and GenericSetup profiles.  Multiple files can be given.  Two variables will be available to you.  The app variable is the zope root.  The portal variable is the plone site as defined by the site-id option. NOTE: file path cannot contain spaces. Default: not set
+
+
+Setting properties
+==================
+
+This recipe lets you set properties for a Plone site as part of a buildout run.
+
+To use this, add something like this to your recipe::
+
+    [setproperties]
+    recipe = isotoma.recipe.plonetools:properties
+    properties = {
+        "somestring": "${some:string}",
+        "somebool": True,
+        "somelist": [1, 2, 3,4 ],
+        }
+
+Mandatory parameters
+--------------------
+
+properties
+    A set of properties as JSON
+
+
+Running commands
+================
+
+This recipe lets you run a script against a Plone site as part of a buildout run.
+
+To use this, add something like this to your recipe::
+
+    [runscript]
+    recipe = isotoma.recipe.plonetools:script
+    command = /path/to/script.py --site-id=Plone --other-param=${foo:bar}
+
+Mandatory parameters
+--------------------
+
+command
+    The script to execute, and the arguments to pass to it
 
