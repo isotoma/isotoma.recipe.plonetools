@@ -35,7 +35,8 @@ setup(
             "default = isotoma.recipe.plonetools:Site",
             "site = isotoma.recipe.plonetools:Site",
             "properties = isotoma.recipe.plonetools:Properties",
-            "script = isotoma.recipe.plonetools:Script"
+            "script = isotoma.recipe.plonetools:Script",
+            "wrapper = isotoma.recipe.plonetools:Wrapper",
         ],
     }
 )

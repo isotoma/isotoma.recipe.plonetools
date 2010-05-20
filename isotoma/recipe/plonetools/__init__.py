@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 """Recipe plonesite"""
 
-import os
-import sys
-import subprocess
+import os, sys, re, subprocess
 import pkg_resources
 from zc.buildout import UserError
 import simplejson as json
@@ -210,5 +208,58 @@ class Script(Recipe):
 
     def get_command(self):
         return self.options["command"]
+
+
+class Wrapper(object):
+
+    """
+    The wrapper recipe generates scripts in bin/ for a list of entry points
+    """
+    parse_entry_point = re.compile(
+        '([^=]+)=(\w+(?:[.]\w+)*):(\w+(?:[.]\w+)*)$'
+        ).match
+
+
+    def __init__(self, buildout, name, options):
+        self.buildout = buildout
+        self.name = name
+        self.options = options
+
+        self.options.setdefault("instance", "instance")
+        self.options.setdefault("instance-script", os.path.join(buildout["buildout"]["bin-directory"], options["instance"]))
+
+    def install(self):
+        for s in self.options.get('entry-points', '').strip().split():
+            parsed = self.parse_entry_point(s)
+            if not parsed:
+                raise UserError("Invalid entry-point: %s" % s)
+            self.make_wrapper(*parsed.groups())
+
+        return self.options.created()
+
+    def make_wrapper(self, name, module, func):
+        script = os.path.join(self.buildout['buildout']['bin-directory'], name)
+        print "Generating wrapper: %s" % script
+
+        f = open(script, "w")
+
+        template = "#! %(instance_script)s run\n" + \
+            "import %(module)s\n" + \
+            "if __name__ == '__main__':\n" + \
+            "    %(module)s.%(func)s()\n\n"
+
+        f.write(template % {
+            "instance_script": self.options['instance-script'],
+            "module": module,
+            "func": func,
+            })
+        f.close()
+
+        os.chmod(script, 0755)
+
+        self.options.created(script)
+
+    def update(self):
+        pass
 
 

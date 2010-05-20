@@ -112,3 +112,38 @@ Mandatory parameters
 command
     The script to execute, and the arguments to pass to it
 
+
+Creating wrapper scripts
+========================
+
+This recipe lets you create a script in your buildouts bin-directory to run a script for you under the correct
+zope instance.
+
+To use this, add something like this to your recipe::
+
+    [instance]
+    recipe = isotoma.recipe.zope2instance
+    otherprops = here
+
+    [wrappers]
+    recipe = isotoma.recipe.plonetools:wrapper
+    instance = instance
+    entry-points =
+       myscript=mypackage.myscript:run
+
+Mandatory parameters
+--------------------
+
+entry-points
+    A list of entry points in the form name=module.function
+
+Optional parameters
+-------------------
+
+instance
+    The name of a zope2instance part. Default: instance.
+
+instance-script
+    The full path to a zopectl or zope2instance script. By default it looks in your buildout bin-directory for instance.
+
+
