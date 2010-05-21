@@ -15,7 +15,7 @@ setup(
         "Operating System :: POSIX",
         "License :: OSI Approved :: Zope Public License",
     ],
-    keywords = "buildout plonw",
+    keywords = "buildout plone",
     author = "John Carr",
     author_email = "john.carr@isotoma.com",
     license="Apache Software License",

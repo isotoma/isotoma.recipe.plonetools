@@ -17,7 +17,9 @@ TRUISMS = [
 ]
 
 def system(c):
-    if os.system(c):
+    p = subprocess.Popen(c, shell=True)
+    sts = os.waitpid(p.pid, 0)[1]
+    if sts != 0:
         raise SystemError("Failed", c)
 
 class Recipe(object):
@@ -107,15 +109,13 @@ class Recipe(object):
 
             try:
                 # work out what to run
-                cmd = "%(bin-directory)s/%(instance-script)s run %(command)s" % {
+                cmd = "%(bin-directory)s/%(instance-script)s" % {
                     "bin-directory": self.bin_directory,
                     "instance-script": self.instance_script,
-                    "command": self.get_command()
                     }
-                print cmd
 
                 # run the script
-                result = subprocess.call(cmd.split())
+                result = subprocess.call([cmd, "run", self.get_command()])
                 if result > 0:
                     raise UserError("Plone script could not complete")
             finally:
