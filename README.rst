@@ -76,12 +76,13 @@ post-extras
 Setting properties
 ==================
 
-This recipe lets you set properties for a Plone site as part of a buildout run.
+This recipe lets you set properties on a plone object as part of a buildout run.
 
 To use this, add something like this to your recipe::
 
     [setproperties]
     recipe = isotoma.recipe.plonetools:properties
+    object = portal
     properties = {
         "somestring": "${some:string}",
         "somebool": True,
@@ -91,8 +92,21 @@ To use this, add something like this to your recipe::
 Mandatory parameters
 --------------------
 
+object
+    An object in your Zope DB to set properties on, normally a Plone site. Default: Plone
+
 properties
-    A set of properties as JSON
+    A set of properties as JSON. Can accept integers, strings, booleans and lists.
+
+
+Optional parameters
+-------------------
+
+instance
+    The name of the instance that will run the script. Default: instance
+
+zeoserver
+    The name of the zeoserver part that should be used.  This is only required if you are using a zope/zeo setup. Default: not set
 
 
 Running commands
@@ -113,13 +127,28 @@ command
     The script to execute, and the arguments to pass to it
 
 
+Optional parameters
+-------------------
+
+instance
+    The name of the instance that will run the script. Default: instance
+
+zeoserver
+    The name of the zeoserver part that should be used.  This is only required if you are using a zope/zeo setup. Default: not set
+
+
 Creating wrapper scripts
 ========================
 
 This recipe lets you create a script in your buildouts bin-directory to run a script for you under the correct
 zope instance.
 
-To use this, add something like this to your recipe::
+If you have a script in mypackage.myscript::
+
+    def run():
+        print "This is my test script
+
+then add something like this to your recipe::
 
     [instance]
     recipe = isotoma.recipe.zope2instance
@@ -135,15 +164,12 @@ Mandatory parameters
 --------------------
 
 entry-points
-    A list of entry points in the form name=module.function
+    These are like the entry-points used in setuptools, in the form of wrappername=your.product.module:function
 
 Optional parameters
 -------------------
 
 instance
-    The name of a zope2instance part. Default: instance.
-
-instance-script
-    The full path to a zopectl or zope2instance script. By default it looks in your buildout bin-directory for instance.
+    The name of a zope2instance part that is used to run the script. Default: instance.
 
 
