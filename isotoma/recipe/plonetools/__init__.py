@@ -1,5 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Recipe plonesite"""
+
+"""
+I provide 4 recipes for building and managing a plone site.
+
+ * Site takes care of creating portals and running quickinstall
+ * Properties lets you set properties on a portal object
+ * Command makes it easy to run a script under the right zope 2 instance as part of buildout
+ * Wrapper makes it easy to create a wrapper that runs a script under the right zope 2 instance
+"""
 
 import os, sys, re, subprocess
 import pkg_resources
@@ -23,7 +31,11 @@ def system(c):
         raise SystemError("Failed", c)
 
 class Recipe(object):
-    """zc.buildout recipe"""
+
+    """
+    I am a base class for recipes that want to start zeo (if applicable), run a script
+    and make sure that zeo is shutdown at the end (but only when I started it).
+    """
 
     def __init__(self, buildout, name, options):
         self.buildout, self.name, self.options = buildout, name, options
@@ -134,6 +146,10 @@ class Recipe(object):
 
 
 class Site(Recipe):
+
+    """
+    I create a plone site and run quickinstall
+    """
 
     def install(self):
         before_install = self.options.get("before-install", None)
