@@ -13,6 +13,7 @@ import os, sys, re, subprocess
 import pkg_resources
 from zc.buildout import UserError
 import simplejson as json
+import shlex
 
 TRUISMS = [
     'yes',
@@ -121,13 +122,14 @@ class Recipe(object):
 
             try:
                 # work out what to run
-                cmd = "%(bin-directory)s/%(instance-script)s" % {
+                cmd = "%(bin-directory)s/%(instance-script)s run %(command)s" % {
                     "bin-directory": self.bin_directory,
                     "instance-script": self.instance_script,
+                    "command": self.get_command(),
                     }
 
                 # run the script
-                result = subprocess.call([cmd, "run", self.get_command()])
+                result = subprocess.call(shlex.split(cmd))
                 if result > 0:
                     raise UserError("Plone script could not complete")
             finally:
@@ -211,7 +213,7 @@ class Properties(Recipe):
 
         return "%(scriptname)s %(args)s" % {
             "scriptname": self.get_internal_script("setproperties.py"),
-            "args": "--site-id=%s --properties=%s" % (self.options['site-id'], location)
+            "args": "--object=%s --properties=%s" % (self.options['object'], location)
             }
 
 

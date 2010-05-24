@@ -18,11 +18,15 @@ typemap = {
 
 parser = optparse.OptionParser()
 parser.add_option("-p", "--properties", dest="properties")
-parser.add_option("-s", "--site-id", dest="site_id")
+parser.add_option("-o", "--object", dest="object")
 options, args = parser.parse_args()
 
-portal = app[options.site_id]
+# Support traversing from app down to a given object
+portal = app
+for k in options.object.split("."):
+    poral = portal[k]
 
+# Iterate over properties in properties.cfg and set them on the object
 properties = json.loads(open(options.properties).read())
 for key, value in properties.iteritems():
     # What kind of thing is this? We only support those in typemap
