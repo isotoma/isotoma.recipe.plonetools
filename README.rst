@@ -172,4 +172,5 @@ Optional parameters
 instance
     The name of a zope2instance part that is used to run the script. Default: instance.
 
-
+arguments
+    Some arguments to be passed to the entry points, as python. Default: app

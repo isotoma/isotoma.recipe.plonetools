@@ -245,6 +245,7 @@ class Wrapper(object):
 
         self.options.setdefault("instance", "instance")
         self.options.setdefault("instance-script", os.path.join(buildout["buildout"]["bin-directory"], options["instance"]))
+        self.options.setdefault("arguments", "app")
 
     def install(self):
         for s in self.options.get('entry-points', '').strip().split():
@@ -264,12 +265,13 @@ class Wrapper(object):
         template = "#! %(instance_script)s run\n" + \
             "import %(module)s\n" + \
             "if __name__ == '__main__':\n" + \
-            "    %(module)s.%(func)s()\n\n"
+            "    %(module)s.%(func)s(%(args)s)\n\n"
 
         f.write(template % {
             "instance_script": self.options['instance-script'],
             "module": module,
             "func": func,
+            "args": self.options['arguments'],
             })
         f.close()
 
