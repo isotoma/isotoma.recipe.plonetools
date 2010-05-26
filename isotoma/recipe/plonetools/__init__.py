@@ -115,7 +115,7 @@ class Recipe(object):
 
         if self.enabled:
 
-            if not self.is_zeo_started() and self.zeoserver:
+            if self.zeoserver and not self.is_zeo_started():
                 zeo_start = "%s start" % self.options["zeo-script"]
                 subprocess.call(zeo_start.split())
                 self.stop_zeo = True
