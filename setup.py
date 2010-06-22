@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-version = '0.0.4'
+version = '0.0.5'
 
 setup(
     name = 'isotoma.recipe.plonetools',
@@ -28,6 +28,7 @@ setup(
     zip_safe = False,
     install_requires = [
         'setuptools',
+        'simplejson',
         'zc.buildout',
     ],
     entry_points = {
