@@ -24,7 +24,7 @@ options, args = parser.parse_args()
 # Support traversing from app down to a given object
 portal = app
 for k in options.object.split("."):
-    poral = portal[k]
+    portal = portal[k]
 
 # Iterate over properties in properties.cfg and set them on the object
 properties = json.loads(open(options.properties).read())
