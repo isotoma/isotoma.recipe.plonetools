@@ -176,6 +176,9 @@ class Site(Recipe):
             args.append("--site-replace")
         args.append("--admin-user=%s" % o("admin-user", "admin"))
 
+        if o('in-mountpoint', None):
+            args.append("--in-mount-point=%s" % o('in-mountpoint'))
+
         def createArgList(arg_name, arg_list):
             if arg_list:
                 for arg in arg_list:

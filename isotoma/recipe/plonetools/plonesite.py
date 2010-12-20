@@ -7,6 +7,10 @@ from AccessControl.SecurityManagement import newSecurityManager
 from AccessControl.SecurityManagement import noSecurityManager
 from Testing import makerequest
 from optparse import OptionParser
+
+from Products.ZODBMountPoint.MountedObject import manage_addMounts
+from Products.ZODBMountPoint.MountedObject import manage_getMountStatus
+
 try:
     from Products.PloneTestCase import version
 except ImportError:
@@ -94,6 +98,36 @@ def create(app, site_id, products_initial, profiles_initial, site_replace):
     runProfiles(plone, profiles_initial)
     print "Finished"
 
+def prepare_mountpoint(app, path):
+    for mountpoint in manage_getMountStatus(app):
+        if mountpoint["path"] == path:
+            break
+    else:
+        raise zc.buildout.UserError('That mountpoint does not exist in zope.conf')
+
+    if mountpoint["status"] == "** Something is in the way **":
+        raise zc.buildout.UserError("The current filestorage has an obstruction prevent use of the ZODB Mount '%s'!" % path)
+
+    elif mountpoint["status"] == "Ready to create":
+        manage_addMounts(app, (path, ))
+        print "Created mount point '%s'" % path
+
+    elif mountpoint["status"] == "Ok":
+        print "Mount point '%s' is Ok, nothing to update"
+
+    else:
+        raise zc.buildout.UserError("Mountpoint '%s' is '%s' - that is an unknown state, buildout cant continue" % (path, mountpoint["status"]))
+
+    # Traverse from the root to wherever the mountpoint is, return that as the place the
+    # plone site will be created
+    retval = app
+    for part in path.split("/"):
+        if not part:
+            continue
+        retval = app[part]
+
+    return retval
+
 def main(app, parser):
     (options, args) = parser.parse_args()
     site_id = options.site_id
@@ -118,9 +152,15 @@ def main(app, parser):
         print "Retrieved the admin user"
     else:
         raise zc.buildout.UserError('The admin-user specified does not exist')
+
+    plonesite_parent = app
+
+    if options.in_mountpoint:
+        plonesite_parent = prepare_mountpoint(app, options.in_mountpoint)
+
     # create the plone site if it doesn't exist
-    create(app, site_id, products_initial, profiles_initial, site_replace)
-    portal = getattr(app, site_id)
+    create(plonesite_parent, site_id, products_initial, profiles_initial, site_replace)
+    portal = getattr(plonesite_parent, site_id)
     # set the site so that the component architecture will work
     # properly
     setSite(portal)
@@ -168,4 +208,6 @@ if __name__ == '__main__':
                       dest="post_extras", action="append", default=[])
     parser.add_option("-b", "--pre-extras",
                       dest="pre_extras", action="append", default=[])
+    parser.add_option("-m", "--in-mount-point", default=None, dest="in_mountpoint")
+
     main(app, parser)
