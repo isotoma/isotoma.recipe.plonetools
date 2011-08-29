@@ -191,6 +191,18 @@ class Site(Recipe):
         createArgList('--profiles-initial', o("profiles-initial", "").split())
         createArgList('--profiles', o("profiles", "").split())
 
+        if "properties" in self.options:
+            dirname = os.path.join(self.buildout['buildout']['parts-directory'], self.name)
+            if not os.path.isdir(dirname):
+                os.makedirs(dirname)
+
+            path = os.path.join(dirname, "properties.cfg")
+
+            json.dump(self.buildout[o["properties"]], open(path, "w"))
+            self.installed.append(path)
+
+            args.extend(["--properties", path])
+
         return "%(scriptname)s %(args)s" % {
             "scriptname": self.get_internal_script("plonesite.py"),
             "args": " ".join(args)

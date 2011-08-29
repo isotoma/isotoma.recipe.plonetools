@@ -128,6 +128,32 @@ def prepare_mountpoint(app, path):
 
     return retval
 
+
+typemap = {
+    "str": "string",
+    "int": "int",
+    "bool": "boolean",
+    "list": "lines",
+    }
+
+def set_properties(portal, path):
+    # Iterate over properties in properties.cfg and set them on the object
+    properties = json.load(open(path))
+    for key, value in properties.iteritems():
+        # What kind of thing is this? We only support those in typemap
+        typename = value.__class__.__name__
+        if not typename in typemap.keys():
+            print "Not setting %s, it has type %s" % (key, typename)
+            continue
+        typename = typemap[typename]
+        print "Setting %s to '%s'" % (key, value)
+
+        if not portal.hasProperty(key):
+            portal.manage_addProperty(key, value, typename)
+        else:
+            portal.manage_changeProperties(**{key: value})
+
+
 def main(app, parser):
     (options, args) = parser.parse_args()
     site_id = options.site_id
@@ -180,6 +206,9 @@ def main(app, parser):
     if profiles:
         runProfiles(portal, profiles)
 
+    if options.properties:
+        set_properties(portal, options.properties)
+
     for post_extra in post_extras:
         runExtras(portal, post_extra)
 
@@ -209,5 +238,6 @@ if __name__ == '__main__':
     parser.add_option("-b", "--pre-extras",
                       dest="pre_extras", action="append", default=[])
     parser.add_option("-m", "--in-mount-point", default=None, dest="in_mountpoint")
+    parser.add_option("--properties", action="store", dest="properties", default=None)
 
     main(app, parser)
