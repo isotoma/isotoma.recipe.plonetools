@@ -1,6 +1,14 @@
+Changelog
+=========
+
+0.0.8 (unreleased)
+------------------
+
+ - Support subtransactions (stops CacheSetup hanging)
+ - Allow the Site recipe to set properties without a seperate properties part
 
 0.1 (2010-04-24)
-================
+----------------
 
 - Created friendly fork of collective.recipe.plonesite
 - Catch non-zero exit codes 

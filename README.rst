@@ -72,10 +72,33 @@ pre-extras
 post-extras
     An absolute path to a file with python code that will be evaluated after running Quickinstaller and GenericSetup profiles.  Multiple files can be given.  Two variables will be available to you.  The app variable is the zope root.  The portal variable is the plone site as defined by the site-id option. NOTE: file path cannot contain spaces. Default: not set
 
+properties
+    The name of a part that provides propert name value mappings.
 
 Setting properties
 ==================
 
+The preferred way is to use the main recipe::
+
+    [portal-properties]
+    somestring = some string
+    somebool = True
+    somelist =
+        1
+        2
+        3
+
+    [plonesite]
+    recipe = isotoma.recipe.plonetools:site
+    <SNIP>
+    properties = portal-properties
+
+Properties set in this way are set at the same time as the Plone Site object is
+updated, during the same zope instance invocation so is more efficient than
+using a seperate recipe.
+
+
+The deprecated way os to use ``isotoma.recipe.plonetools:properties``.
 This recipe lets you set properties on a plone object as part of a buildout run.
 
 To use this, add something like this to your recipe::
