@@ -12,6 +12,11 @@ from Products.ZODBMountPoint.MountedObject import manage_addMounts
 from Products.ZODBMountPoint.MountedObject import manage_getMountStatus
 
 try:
+    import json
+except ImportError:
+    import simplejson as json
+
+try:
     from Products.PloneTestCase import version
 except ImportError:
     version = None

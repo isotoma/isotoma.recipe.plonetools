@@ -12,7 +12,11 @@ I provide 4 recipes for building and managing a plone site.
 import os, sys, re, subprocess
 import pkg_resources
 from zc.buildout import UserError
-import simplejson as json
+try:
+    import json
+except ImportError:
+    import simplejson as json
+
 import shlex
 
 TRUISMS = [
@@ -198,7 +202,18 @@ class Site(Recipe):
 
             path = os.path.join(dirname, "properties.cfg")
 
-            json.dump(self.buildout[o["properties"]], open(path, "w"))
+            props = {}
+            for k, v in self.buildout[self.options["properties"]].items():
+                if "\n" in v:
+                    props[k] = v.strip().split("\n")
+                elif v.strip().lower() in ("yes", "on", "true"):
+                    props[k] = True
+                elif v.strip().lower() in ("no", "off", "false"):
+                    props[k] = False
+                else:
+                    props[k] = v
+
+            json.dump(props, open(path, "w"))
             self.installed.append(path)
 
             args.extend(["--properties", path])
