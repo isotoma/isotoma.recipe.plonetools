@@ -213,7 +213,7 @@ def main(app, parser):
         runExtras(portal, post_extra)
 
     # commit the transaction
-    transaction.commit()
+    transaction.commit(True)
     noSecurityManager()
 
 if __name__ == '__main__':
