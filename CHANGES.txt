@@ -1,7 +1,7 @@
 Changelog
 =========
 
-0.0.8 (unreleased)
+0.0.8 (2011-08-30)
 ------------------
 
  - Support subtransactions (stops CacheSetup hanging)
