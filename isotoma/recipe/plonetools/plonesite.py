@@ -159,6 +159,26 @@ def set_properties(portal, path):
             portal.manage_changeProperties(**{key: value})
 
 
+def set_mutators(portal, path):
+    mutations = json.load(open(path))
+
+    # Group all object updates together
+    grouped = {}
+    for mutator, value in mutations.iteritems():
+        obj, setter = mutator.rsplit(".", 1)
+        grouped.setdefault(obj, {})[setter] = value
+
+    for obj, values in grouped.iteritems():
+        parts = obj.split(".")
+        target = portal
+        while parts:
+            target = getattr(target, parts.pop(0))
+
+        for setter, value in values.iteritems():
+            mutator = getattr(target, setter)
+            mutator(value)
+
+
 def main(app, parser):
     (options, args) = parser.parse_args()
     site_id = options.site_id
@@ -214,6 +234,9 @@ def main(app, parser):
     if options.properties:
         set_properties(portal, options.properties)
 
+    if options.mutators:
+        set_mutators(portal, options.mutators)
+
     for post_extra in post_extras:
         runExtras(portal, post_extra)
 
@@ -244,5 +267,5 @@ if __name__ == '__main__':
                       dest="pre_extras", action="append", default=[])
     parser.add_option("-m", "--in-mount-point", default=None, dest="in_mountpoint")
     parser.add_option("--properties", action="store", dest="properties", default=None)
-
+    parser.add_option("--mutators", action="store", dest="mutators", default=None)
     main(app, parser)

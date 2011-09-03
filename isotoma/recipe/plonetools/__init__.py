@@ -196,32 +196,39 @@ class Site(Recipe):
         createArgList('--profiles', o("profiles", "").split())
 
         if "properties" in self.options:
-            dirname = os.path.join(self.buildout['buildout']['parts-directory'], self.name)
-            if not os.path.isdir(dirname):
-                os.makedirs(dirname)
-
-            path = os.path.join(dirname, "properties.cfg")
-
-            props = {}
-            for k, v in self.buildout[self.options["properties"]].items():
-                if "\n" in v:
-                    props[k] = v.strip().split("\n")
-                elif v.strip().lower() in ("yes", "on", "true"):
-                    props[k] = True
-                elif v.strip().lower() in ("no", "off", "false"):
-                    props[k] = False
-                else:
-                    props[k] = v
-
-            json.dump(props, open(path, "w"))
-            self.installed.append(path)
-
+            path = self.write(self.options["properties"], "properties.cfg")
             args.extend(["--properties", path])
+
+        if "mutators" in self.options:
+            path = self.write(self.options["mutators"], "mutators.cfg")
+            args.extend(["--mutators", path])
 
         return "%(scriptname)s %(args)s" % {
             "scriptname": self.get_internal_script("plonesite.py"),
             "args": " ".join(args)
             }
+
+    def write(self, options, target):
+        dirname = os.path.join(self.buildout['buildout']['parts-directory'], self.name)
+        if not os.path.isdir(dirname):
+            os.makedirs(dirname)
+
+        path = os.path.join(dirname, target)
+
+        props = {}
+        for k, v in self.buildout[options].items():
+            if "\n" in v:
+                props[k] = v.strip().split("\n")
+            elif v.strip().lower() in ("yes", "on", "true"):
+                props[k] = True
+            elif v.strip().lower() in ("no", "off", "false"):
+                props[k] = False
+            else:
+                props[k] = v
+
+        json.dump(props, open(path, "w"))
+        self.installed.append(path)
+        return path
 
 
 class Properties(Recipe):

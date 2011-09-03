@@ -4,7 +4,7 @@ Changelog
 0.0.9 (unreleased)
 ------------------
 
-- Nothing changed yet.
+- Add support for calling any setters from buildout.
 
 
 0.0.8 (2011-08-30)
