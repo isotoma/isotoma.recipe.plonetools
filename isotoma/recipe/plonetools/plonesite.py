@@ -109,8 +109,20 @@ class Plonesite(object):
         print "Finished"
 
     def _retryable(self, error_type, error):
+        """
+        I inspect an error and determient if it is transient and retryable or not
+
+        If supported, I will ask all resources involved in the transaction if they
+        think its a good idea to retry, by calling their ``should_retry`` method.
+        """
         if issubclass(error_type, TransientError):
             return True
+
+        t = transaction.get()
+
+        if not hasattr(t, "_resources"):
+            return True
+
         for dm in transaction.get()._resources:
             should_retry = getattr(dm, 'should_retry', None)
             if (should_retry is not None) and should_retry(error):
@@ -191,25 +203,7 @@ class Plonesite(object):
                 mutator = getattr(target, setter)
                 mutator(value)
 
-
-    @classmethod
-    def main(cls, app, parser):
-        (options, args) = parser.parse_args()
-
-        p = cls()
-
-        p.site_id = options.site_id
-        p.site_replace = options.site_replace
-        p.admin_user = options.admin_user
-        p.post_extras = options.post_extras
-        p.pre_extras = options.pre_extras
-
-        # normalize our product/profile lists
-        p.products_initial = getProductsWithSpace(options.products_initial)
-        p.products = getProductsWithSpace(options.products)
-        p.profiles_initial = getProductsWithSpace(options.profiles_initial)
-        p.profiles = getProductsWithSpace(options.profiles)
-
+    def run(self):
         app = makerequest.makerequest(app)
         # set up security manager
         acl_users = app.acl_users
@@ -223,8 +217,8 @@ class Plonesite(object):
 
         plonesite_parent = app
 
-        if options.in_mountpoint:
-            plonesite_parent = prepare_mountpoint(app, options.in_mountpoint)
+        if self.in_mountpoint:
+            plonesite_parent = prepare_mountpoint(app, self.in_mountpoint)
 
         # create the plone site if it doesn't exist
         create(plonesite_parent, p.site_id, p.products_initial, p.profiles_initial, p.site_replace)
@@ -248,11 +242,11 @@ class Plonesite(object):
         if profiles:
             runProfiles(portal, p.profiles)
 
-        if options.properties:
-            set_properties(portal, options.properties)
+        if self.properties:
+            set_properties(portal, self.properties)
 
-        if options.mutators:
-            set_mutators(portal, options.mutators)
+        if self.mutators:
+            set_mutators(portal, self.mutators)
 
         for post_extra in p.post_extras:
             runExtras(portal, post_extra)
@@ -261,6 +255,40 @@ class Plonesite(object):
         transaction.commit(True)
         noSecurityManager()
 
+    @classmethod
+    def main(cls, app, parser):
+        (options, args) = parser.parse_args()
+
+        p = cls()
+
+        p.site_id = options.site_id
+        p.site_replace = options.site_replace
+        p.admin_user = options.admin_user
+        p.post_extras = options.post_extras
+        p.pre_extras = options.pre_extras
+
+        # normalize our product/profile lists
+        p.products_initial = getProductsWithSpace(options.products_initial)
+        p.products = getProductsWithSpace(options.products)
+        p.profiles_initial = getProductsWithSpace(options.profiles_initial)
+        p.profiles = getProductsWithSpace(options.profiles)
+
+        p.in_mountpoint = options.in_mountpoint
+        p.properties = options.properties
+        p.mutators = options.mutators
+
+        for i in range(int(options.get("attempts", "20"))):
+            try:
+                p.run()
+            except:
+                (type, value, traceback) = sys.exc_info()
+
+                if not self._retryable(type, value):
+                    raise
+                print "A recoverable TransientError was handled, retrying..."
+                transaction.abort()
+            else:
+                break
 
 if __name__ == '__main__':
     now_str = datetime.now().strftime('%Y-%m-%d-%H%M%S')

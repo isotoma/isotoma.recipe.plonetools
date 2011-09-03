@@ -5,7 +5,7 @@ Changelog
 ------------------
 
 - Add support for calling any setters from buildout.
-
+- If a transient error occurs, retry up to ``${:attempts}`` times.
 
 0.0.8 (2011-08-30)
 ------------------
@@ -17,7 +17,7 @@ Changelog
 ----------------
 
 - Created friendly fork of collective.recipe.plonesite
-- Catch non-zero exit codes 
+- Catch non-zero exit codes
 - Added a test to see if zeo is running before starting it
 - Only shutdown zeo if we started it
 
