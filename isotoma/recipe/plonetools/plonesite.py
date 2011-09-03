@@ -206,12 +206,14 @@ class Plonesite(object):
             grouped.setdefault(obj, {})[setter] = value
 
         for obj, values in grouped.iteritems():
+            print "Setting values on %s" % obj
             parts = obj.split(".")
             target = portal
             while parts:
-                target = getattr(target, parts.pop(0))
+                target = target[parts.pop(0)]
 
             for setter, value in values.iteritems():
+                print "  %s = %s" % (setter, value)
                 mutator = getattr(target, setter)
                 mutator(value)
 
