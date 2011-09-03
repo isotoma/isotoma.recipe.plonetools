@@ -3,6 +3,7 @@ from datetime import datetime
 from zope.app.component.hooks import setSite
 import zc.buildout
 import transaction
+from transaction.interfaces import TransientError
 from AccessControl.SecurityManagement import newSecurityManager
 from AccessControl.SecurityManagement import noSecurityManager
 from Testing import makerequest
@@ -27,6 +28,7 @@ try:
 except ImportError:
     # we are using a release prior to 3.x
     pre_plone3 = True
+
 
 # the madness with the comma is a result of product names with spaces
 def getProductsWithSpace(opts):
@@ -102,6 +104,16 @@ def create(app, site_id, products_initial, profiles_initial, site_replace):
     # run GS profiles
     runProfiles(plone, profiles_initial)
     print "Finished"
+
+
+def _retryable(error_type, error):
+    if issubclass(error_type, TransientError):
+        return True
+    for dm in transaction.get()._resources:
+        should_retry = getattr(dm, 'should_retry', None)
+        if (should_retry is not None) and should_retry(error):
+            return True
+
 
 def prepare_mountpoint(app, path):
     for mountpoint in manage_getMountStatus(app):
