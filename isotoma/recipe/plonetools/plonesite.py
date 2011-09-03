@@ -3,7 +3,6 @@ from datetime import datetime
 from zope.app.component.hooks import setSite
 import zc.buildout
 import transaction
-from transaction.interfaces import TransientError
 from AccessControl.SecurityManagement import newSecurityManager
 from AccessControl.SecurityManagement import noSecurityManager
 from Testing import makerequest
@@ -28,6 +27,16 @@ try:
 except ImportError:
     # we are using a release prior to 3.x
     pre_plone3 = True
+
+try:
+    from transaction.interfaces import TransientError
+except ImportError:
+    TransientError = None
+
+try:
+    from ZODB.POSException import ConflictError
+except ImportError:
+    ConflictError = None
 
 
 class Plonesite(object):
@@ -103,19 +112,22 @@ class Plonesite(object):
         # install some products
         plone = getattr(app, site_id)
         if plone:
-            quickinstall(plone, products_initial)
+            self.quickinstall(plone, products_initial)
         # run GS profiles
-            runProfiles(plone, profiles_initial)
+            self.runProfiles(plone, profiles_initial)
         print "Finished"
 
-    def _retryable(self, error_type, error):
+    def retryable(self, error_type, error):
         """
         I inspect an error and determient if it is transient and retryable or not
 
         If supported, I will ask all resources involved in the transaction if they
         think its a good idea to retry, by calling their ``should_retry`` method.
         """
-        if issubclass(error_type, TransientError):
+        if TransientError and issubclass(error_type, TransientError):
+            return True
+
+        if ConflictError and issubclass(error_type, ConflictError):
             return True
 
         t = transaction.get()
@@ -203,11 +215,11 @@ class Plonesite(object):
                 mutator = getattr(target, setter)
                 mutator(value)
 
-    def run(self):
+    def run(self, app):
         app = makerequest.makerequest(app)
         # set up security manager
         acl_users = app.acl_users
-        user = acl_users.getUser(admin_user)
+        user = acl_users.getUser(self.admin_user)
         if user:
             user = user.__of__(acl_users)
             newSecurityManager(None, user)
@@ -221,8 +233,8 @@ class Plonesite(object):
             plonesite_parent = prepare_mountpoint(app, self.in_mountpoint)
 
         # create the plone site if it doesn't exist
-        create(plonesite_parent, p.site_id, p.products_initial, p.profiles_initial, p.site_replace)
-        portal = getattr(plonesite_parent, p.site_id)
+        self.create(plonesite_parent, self.site_id, self.products_initial, self.profiles_initial, self.site_replace)
+        portal = getattr(plonesite_parent, self.site_id)
         # set the site so that the component architecture will work
         # properly
         setSite(portal)
@@ -234,21 +246,22 @@ class Plonesite(object):
                 msg = 'The path to the extras script does not exist: %s'
                 raise zc.buildout.UserError(msg % script_path)
 
-        for pre_extra in p.pre_extras:
+        for pre_extra in self.pre_extras:
             runExtras(portal, pre_extra)
 
-        if products:
-            quickinstall(portal, p.products)
-        if profiles:
-            runProfiles(portal, p.profiles)
+        if self.products:
+            self.quickinstall(portal, self.products)
+
+        if self.profiles:
+            self.runProfiles(portal, self.profiles)
 
         if self.properties:
-            set_properties(portal, self.properties)
+            self.set_properties(portal, self.properties)
 
         if self.mutators:
-            set_mutators(portal, self.mutators)
+            self.set_mutators(portal, self.mutators)
 
-        for post_extra in p.post_extras:
+        for post_extra in self.post_extras:
             runExtras(portal, post_extra)
 
         # commit the transaction
@@ -268,22 +281,22 @@ class Plonesite(object):
         p.pre_extras = options.pre_extras
 
         # normalize our product/profile lists
-        p.products_initial = getProductsWithSpace(options.products_initial)
-        p.products = getProductsWithSpace(options.products)
-        p.profiles_initial = getProductsWithSpace(options.profiles_initial)
-        p.profiles = getProductsWithSpace(options.profiles)
+        p.products_initial = p.getProductsWithSpace(options.products_initial)
+        p.products = p.getProductsWithSpace(options.products)
+        p.profiles_initial = p.getProductsWithSpace(options.profiles_initial)
+        p.profiles = p.getProductsWithSpace(options.profiles)
 
         p.in_mountpoint = options.in_mountpoint
         p.properties = options.properties
         p.mutators = options.mutators
 
-        for i in range(int(options.get("attempts", "20"))):
+        for i in range(int(options.attempts)):
             try:
-                p.run()
+                p.run(app)
             except:
                 (type, value, traceback) = sys.exc_info()
 
-                if not self._retryable(type, value):
+                if not p.retryable(type, value):
                     raise
                 print "A recoverable TransientError was handled, retrying..."
                 transaction.abort()
@@ -293,6 +306,7 @@ class Plonesite(object):
 if __name__ == '__main__':
     now_str = datetime.now().strftime('%Y-%m-%d-%H%M%S')
     parser = OptionParser()
+    parser.add_option("--attempts", action="store", dest="attempts", default=20)
     parser.add_option("-s", "--site-id",
                       dest="site_id", default="Plone-%s" % now_str)
     parser.add_option("-r", "--site-replace",
