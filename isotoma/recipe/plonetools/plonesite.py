@@ -46,15 +46,15 @@ class Plonesite(object):
         return [x.replace(',', '') for x in opts]
 
     def runProfiles(self, plone, profiles):
-        print "Running profiles: %s" % profiles
         stool = plone.portal_setup
         for profile in profiles:
             if not profile.startswith('profile-'):
                 profile = "profile-%s" % profile
+            print "Running profile: %s" % profile
             stool.runAllImportStepsFromProfile(profile)
+            transaction.savepoint()
 
     def quickinstall(self, plone, products):
-        print "Quick installing: %s" % products
         qit = plone.portal_quickinstaller
         not_installed_ids = [
             x['id'] for x in qit.listInstallableProducts(skipInstalled=1)
@@ -63,9 +63,15 @@ class Plonesite(object):
         installed_products = filter(installed_ids.count, products)
         not_installed = filter(not_installed_ids.count, products)
         if installed_products:
-            qit.reinstallProducts(installed_products)
+            for p in installed_products:
+                print "Quick (re)installing %s" % p
+                qit.reinstallProducts([p])
+                transaction.savepoint()
         if not_installed_ids:
-            qit.installProducts(not_installed)
+            for p in not_installed:
+                print "Quick installing %s" % p
+                qit.installProducts([p])
+                transaction.savepoint()
 
     def create(self, app, site_id, products_initial, profiles_initial, site_replace):
         oids = app.objectIds()
@@ -152,6 +158,7 @@ class Plonesite(object):
 
         elif mountpoint["status"] == "Ready to create":
             manage_addMounts(app, (path, ))
+            transaction.savepoint()
             print "Created mount point '%s'" % path
 
         elif mountpoint["status"] == "Ok":
@@ -195,6 +202,8 @@ class Plonesite(object):
             else:
                 portal.manage_changeProperties(**{key: value})
 
+        transaction.savepoint()
+
 
     def set_mutators(self, portal, path):
         mutations = json.load(open(path))
@@ -216,6 +225,8 @@ class Plonesite(object):
                 print "  %s = %s" % (setter, value)
                 mutator = getattr(target, setter)
                 mutator(value)
+
+        transaction.savepoint()
 
     def run(self, app):
         app = makerequest.makerequest(app)
@@ -267,7 +278,7 @@ class Plonesite(object):
             runExtras(portal, post_extra)
 
         # commit the transaction
-        transaction.commit(True)
+        transaction.commit()
         noSecurityManager()
 
     @classmethod

@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-version = '0.0.10dev'
+version = '0.0.10'
 
 setup(
     name = 'isotoma.recipe.plonetools',
