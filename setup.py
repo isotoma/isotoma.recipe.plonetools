@@ -28,15 +28,12 @@ setup(
     zip_safe = False,
     install_requires = [
         'setuptools',
-        'simplejson',
         'zc.buildout',
     ],
     entry_points = {
         "zc.buildout": [
             "default = isotoma.recipe.plonetools:Site",
             "site = isotoma.recipe.plonetools:Site",
-            "properties = isotoma.recipe.plonetools:Properties",
-            "script = isotoma.recipe.plonetools:Script",
             "wrapper = isotoma.recipe.plonetools:Wrapper",
         ],
     }

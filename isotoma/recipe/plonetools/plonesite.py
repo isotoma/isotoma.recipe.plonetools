@@ -1,4 +1,4 @@
-import os
+import os, sys
 from datetime import datetime
 from zope.app.component.hooks import setSite
 import zc.buildout
@@ -7,6 +7,7 @@ from AccessControl.SecurityManagement import newSecurityManager
 from AccessControl.SecurityManagement import noSecurityManager
 from Testing import makerequest
 from optparse import OptionParser
+import ConfigParser
 
 from Products.ZODBMountPoint.MountedObject import manage_addMounts
 from Products.ZODBMountPoint.MountedObject import manage_getMountStatus
@@ -39,7 +40,42 @@ except ImportError:
     ConflictError = None
 
 
+def deserialize(val):
+    if "\n" in val:
+        return val.strip().split("\n")
+    elif val.lower in ("yes", "true", "on"):
+        return True
+    elif val.lower in ("no", "false", "off"):
+        return False
+    return val
+
+
 class Plonesite(object):
+
+    typemap = {
+        "str": "string",
+        "int": "int",
+        "bool": "boolean",
+        "list": "lines",
+        }
+
+    def __init__(self):
+        self.site_id = 'Plone'
+        self.site_replace = False
+        self.admin_user = 'admin'
+        self.attempts = 20
+
+        self.post_extras = []
+        self.pre_extras = []
+        self.products_initial = []
+        self.products = []
+        self.profiles_initial = []
+        self.profiles = []
+
+        self.in_mountpoint = None
+
+        self.properties = {}
+        self.mutators = {}
 
     # the madness with the comma is a result of product names with spaces
     def getProductsWithSpace(self, opts):
@@ -178,17 +214,8 @@ class Plonesite(object):
         return retval
 
 
-    typemap = {
-        "str": "string",
-        "int": "int",
-        "bool": "boolean",
-        "list": "lines",
-        }
-
     def set_properties(self, portal, path):
-        # Iterate over properties in properties.cfg and set them on the object
-        properties = json.load(open(path))
-        for key, value in properties.iteritems():
+        for key, value in self.properties.iteritems():
             # What kind of thing is this? We only support those in typemap
             typename = value.__class__.__name__
             if not typename in self.typemap.keys():
@@ -206,11 +233,8 @@ class Plonesite(object):
 
 
     def set_mutators(self, portal, path):
-        mutations = json.load(open(path))
-
-        # Group all object updates together
         grouped = {}
-        for mutator, value in mutations.iteritems():
+        for mutator, value in self.mutators.iteritems():
             obj, setter = mutator.rsplit(".", 1)
             grouped.setdefault(obj, {})[setter] = value
 
@@ -248,16 +272,17 @@ class Plonesite(object):
         # create the plone site if it doesn't exist
         self.create(plonesite_parent, self.site_id, self.products_initial, self.profiles_initial, self.site_replace)
         portal = getattr(plonesite_parent, self.site_id)
+
         # set the site so that the component architecture will work
         # properly
         setSite(portal)
 
         def runExtras(portal, script_path):
-            if os.path.exists(script_path):
-                execfile(script_path)
-            else:
+            if not os.path.exists(script_path):
                 msg = 'The path to the extras script does not exist: %s'
                 raise zc.buildout.UserError(msg % script_path)
+            print "Running extra:", script_path
+            execfile(script_path, {"app": app, "portal": portal})
 
         for pre_extra in self.pre_extras:
             runExtras(portal, pre_extra)
@@ -281,29 +306,57 @@ class Plonesite(object):
         transaction.commit()
         noSecurityManager()
 
-    @classmethod
-    def main(cls, app, parser):
-        (options, args) = parser.parse_args()
+    def configure_from_file(self, path):
+        cfg = ConfigParser.RawConfigParser()
+        cfg.optionxform = str
 
-        p = cls()
+        cfg.read(path)
 
-        p.site_id = options.site_id
-        p.site_replace = options.site_replace
-        p.admin_user = options.admin_user
-        p.post_extras = options.post_extras
-        p.pre_extras = options.pre_extras
+        self.site_id = cfg.get("main", "site-id")
+        self.site_replace = cfg.getboolean("main", "site-replace")
+        self.admin_user = cfg.get("main", "admin-user")
+
+        if cfg.has_option("main", "post-extras"):
+            self.post_extras = cfg.get("main", "post-extras").strip().split()
+        if cfg.has_option("main", "pre-extras"):
+            self.pre_extras = cfg.get("main", "pre-extras").strip().split()
 
         # normalize our product/profile lists
-        p.products_initial = p.getProductsWithSpace(options.products_initial)
-        p.products = p.getProductsWithSpace(options.products)
-        p.profiles_initial = p.getProductsWithSpace(options.profiles_initial)
-        p.profiles = p.getProductsWithSpace(options.profiles)
+        if cfg.has_option("main", "products-initial"):
+            self.products_initial = self.getProductsWithSpace(cfg.get("main", "products-initial").strip().split())
+        if cfg.has_option("main", "products"):
+            self.products = self.getProductsWithSpace(cfg.get("main", "products").strip().split())
+        if cfg.has_option("main", "profiles-intial"):
+            self.profiles_initial = self.getProductsWithSpace(cfg.get("main", "profiles-initial").strip().split())
+        if cfg.has_option("main", "profiles"):
+            self.profiles = self.getProductsWithSpace(cfg.get("main", "profiles").strip().split())
 
-        p.in_mountpoint = options.in_mountpoint
-        p.properties = options.properties
-        p.mutators = options.mutators
+        if cfg.has_option("main", "in_mountpoint"):
+            self.in_mountpoint = options.in_mountpoint
 
-        for i in range(int(options.attempts)):
+        if cfg.has_section("properties"):
+            for k, v in cfg.items("properties"):
+                self.properties[k] = deserialize(v)
+
+        if cfg.has_section("mutators"):
+            for k, v in cfg.items("mutators"):
+                self.mutators[k] = deserialize(v)
+
+        if cfg.has_option("main", "attempts"):
+            self.attempts = cfg.getint("main", "attempts")
+
+    @classmethod
+    def main(cls, app, config=None):
+        parser = OptionParser()
+        parser.add_option("-c", "--config", default=config)
+        parser.add_option("-r", "--replace", action="store_true")
+        options, args = parser.parse_args()
+
+        p = cls()
+        p.configure_from_file(options.config)
+        p.site_replace = options.replace
+
+        for i in range(int(p.attempts)):
             try:
                 p.run(app)
             except:
@@ -316,30 +369,16 @@ class Plonesite(object):
             else:
                 break
 
-if __name__ == '__main__':
-    now_str = datetime.now().strftime('%Y-%m-%d-%H%M%S')
-    parser = OptionParser()
-    parser.add_option("--attempts", action="store", dest="attempts", default=20)
-    parser.add_option("-s", "--site-id",
-                      dest="site_id", default="Plone-%s" % now_str)
-    parser.add_option("-r", "--site-replace",
-                      dest="site_replace", action="store_true", default=False)
-    parser.add_option("-u", "--admin-user",
-                      dest="admin_user", default="admin")
-    parser.add_option("-p", "--products-initial",
-                      dest="products_initial", action="append", default=[])
-    parser.add_option("-a", "--products",
-                      dest="products", action="append", default=[])
-    parser.add_option("-g", "--profiles-initial",
-                      dest="profiles_initial", action="append", default=[])
-    parser.add_option("-x", "--profiles",
-                      dest="profiles", action="append", default=[])
-    parser.add_option("-e", "--post-extras",
-                      dest="post_extras", action="append", default=[])
-    parser.add_option("-b", "--pre-extras",
-                      dest="pre_extras", action="append", default=[])
-    parser.add_option("-m", "--in-mount-point", default=None, dest="in_mountpoint")
-    parser.add_option("--properties", action="store", dest="properties", default=None)
-    parser.add_option("--mutators", action="store", dest="mutators", default=None)
+        # Make sure worker threads are killed off
+        try:
+            from Products.CMFSquidTool.utils import stopThreads
+            print "Stopping CMFSquidTool purge queue..."
+            stopThreads()
 
-    Plonesite.main(app, parser)
+        except ImportError:
+            # Import error means no CacheSetup; so dont worry
+            pass
+
+if __name__ == '__main__':
+    Plonesite.main(app)
+

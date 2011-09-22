@@ -9,13 +9,9 @@ I provide 4 recipes for building and managing a plone site.
  * Wrapper makes it easy to create a wrapper that runs a script under the right zope 2 instance
 """
 
-import os, sys, re, subprocess
+import os, sys, re, subprocess, ConfigParser
 import pkg_resources
 from zc.buildout import UserError
-try:
-    import json
-except ImportError:
-    import simplejson as json
 
 import shlex
 
@@ -170,99 +166,84 @@ class Site(Recipe):
 
         return self.installed
 
-    def get_command(self):
-        o = self.options.get
+    def set_list(self, cfg, section, var):
+        def _():
+            for v in self.options.get(var, "").strip().split():
+                if not v.strip():
+                    continue
+                yield "    " + v
+        value = list(_())
+        if value:
+            cfg.set(section, var, "\n" + "\n".join(value))
 
-        args = []
-        args.append("--site-id=%s" % o("site-id", "Plone"))
-        # only pass the site replace option if it's True
-        if o('site-replace', '').lower() in TRUISMS:
-            args.append("--site-replace")
-        args.append("--admin-user=%s" % o("admin-user", "admin"))
-
-        if o('in-mountpoint', None):
-            args.append("--in-mount-point=%s" % o('in-mountpoint'))
-
-        def createArgList(arg_name, arg_list):
-            if arg_list:
-                for arg in arg_list:
-                    args.append("%s=%s" % (arg_name, arg))
-
-        createArgList('--pre-extras', o("pre-extras", "").split())
-        createArgList('--post-extras', o("post-extras", "").split())
-        createArgList('--products-initial', o("products-initial", "").split())
-        createArgList('--products', o("products", "").split())
-        createArgList('--profiles-initial', o("profiles-initial", "").split())
-        createArgList('--profiles', o("profiles", "").split())
-
-        if "properties" in self.options:
-            path = self.write(self.options["properties"], "properties.cfg")
-            args.extend(["--properties", path])
-
-        if "mutators" in self.options:
-            path = self.write(self.options["mutators"], "mutators.cfg")
-            args.extend(["--mutators", path])
-
-        return "%(scriptname)s %(args)s" % {
-            "scriptname": self.get_internal_script("plonesite.py"),
-            "args": " ".join(args)
-            }
-
-    def write(self, options, target):
+    def write_plonesite_cfg(self):
         dirname = os.path.join(self.buildout['buildout']['parts-directory'], self.name)
         if not os.path.isdir(dirname):
             os.makedirs(dirname)
 
-        path = os.path.join(dirname, target)
+        cfgpath = os.path.join(dirname, "plonesite.cfg")
+        self.installed.append(cfgpath)
 
-        props = {}
-        for k, v in self.buildout[options].items():
-            if "\n" in v:
-                props[k] = v.strip().split("\n")
-            elif v.strip().lower() in ("yes", "on", "true"):
-                props[k] = True
-            elif v.strip().lower() in ("no", "off", "false"):
-                props[k] = False
-            else:
-                props[k] = v
+        config = ConfigParser.RawConfigParser()
+        config.optionxform = str
 
-        json.dump(props, open(path, "w"))
-        self.installed.append(path)
-        return path
+        config.add_section("main")
+        config.set("main", "site-id", self.options.get('site-id', 'Plone'))
+        config.set("main", "site-replace", self.options.get('site-replace', '').lower() in TRUISMS)
+        config.set("main", "admin-user", self.options.get('admin-user', 'admin'))
 
+        if 'in-mountpoint' in self.options:
+            config.set("main", "in-mountpoint", self.options['in-mountpoint'])
 
-class Properties(Recipe):
+        self.set_list(config, "main", "pre-extras")
+        self.set_list(config, "main", "post-extras")
+        self.set_list(config, "main", "products-initial")
+        self.set_list(config, "main", "products")
+        self.set_list(config, "main", "profiles-initial")
+        self.set_list(config, "main", "profiles")
 
-    """
-    This recipe writes all properties set on it into a .cfg in its part directory.
-    It then runs a script to process this file and insert them into a plonesite as
-    portal properties.
-    """
+        if "properties" in self.options:
+            config.add_section("properties")
+            for k, v in self.buildout[self.options["properties"]].items():
+                config.set("properties", k, v)
+
+        if "mutators" in self.options:
+            config.add_section("mutators")
+            for k, v in self.buildout[self.options["mutators"]].items():
+                config.set("mutators", k, v)
+
+        config.write(open(cfgpath, 'wb'))
+
+        self.write_script(self.name, cfgpath)
+
+        return cfgpath
+
+    def write_script(self, name, cfgpath):
+        instance_script = os.path.join(self.buildout["buildout"]["bin-directory"], self.options.get("instance", "instance"))
+        first_line = "#! %s run\n" % instance_script
+
+        script = os.path.join(self.buildout['buildout']['bin-directory'], name)
+        print "Generating wrapper: %s" % script
+
+        # To get around this recipe not being on sys.path for bin/instance lets just copy the script
+        # into bin instance, but point it at a sensible config file by default
+        body = open(os.path.join(os.path.dirname(__file__), "plonesite.py")).read()
+        body = first_line + body.replace("Plonesite.main(app)", "Plonesite.main(app,'%s')" % cfgpath)
+
+        f = open(script, "w")
+        f.write(body)
+        f.close()
+
+        os.chmod(script, 0755)
+
+        self.installed.append(script)
 
     def get_command(self):
-        location = os.path.join(self.buildout['buildout']['parts-directory'], self.name)
-        if not os.path.isdir(location):
-            os.makedirs(location)
-        location = os.path.join(location, "properties.cfg")
-
-        open(location, "w").write(self.options.get("properties", "{}"))
-        self.installed.append(location)
-
+        args = ["-c", self.write_plonesite_cfg()]
         return "%(scriptname)s %(args)s" % {
-            "scriptname": self.get_internal_script("setproperties.py"),
-            "args": "--object=%s --properties=%s" % (self.options['object'], location)
+            "scriptname": self.get_internal_script("plonesite.py"),
+            "args": " ".join(args)
             }
-
-
-class Script(Recipe):
-
-    """
-    The script recipe takes a 'command' parameter: this is what to tell the
-    instance script to run
-    """
-
-    def get_command(self):
-        return self.options["command"]
 
 
 class Wrapper(object):
