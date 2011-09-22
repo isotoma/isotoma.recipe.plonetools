@@ -4,6 +4,9 @@ Changelog
 0.0.11 (unreleased)
 -------------------
 
+- The properties and script helper are no longer supported
+- Write a script that can run migrations without running the rest of buildout
+- This script supports a '-r' flag for rebuild the /portal object from scratch.
 - Don't hang if CMFSquidTool has a purge queue that is unending
 - Drop JSON dependency
 

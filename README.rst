@@ -75,10 +75,11 @@ post-extras
 properties
     The name of a part that provides propert name value mappings.
 
+
 Setting properties
 ==================
 
-The preferred way is to use the main recipe::
+You can set properties on your plone site object from buildout::
 
     [portal-properties]
     somestring = some string
@@ -98,73 +99,51 @@ updated, during the same zope instance invocation so is more efficient than
 using a seperate recipe.
 
 
-The deprecated way os to use ``isotoma.recipe.plonetools:properties``.
-This recipe lets you set properties on a plone object as part of a buildout run.
+Calling Setters On Plone Objects
+================================
 
-To use this, add something like this to your recipe::
+As a last resort you can call setters directly from buildout. This is meant
+for things like CacheSetup where your cached domains might vary between
+environments.
 
-    [setproperties]
-    recipe = isotoma.recipe.plonetools:properties
-    object = portal
-    properties = {
-        "somestring": "${some:string}",
-        "somebool": True,
-        "somelist": [1, 2, 3,4 ],
-        }
+Just add::
 
-Mandatory parameters
---------------------
+    [mutators]
+    some.object.setFoo = True
+    some.object.setList =
+        1
+        2
+        3
+    some.other.object.setBar = some string
 
-object
-    An object in your Zope DB to set properties on, normally a Plone site. Default: Plone
+    [plonesite]
+    recipe = isotoma.recipe.plonetools:site
+    <SNIP>
+    mutators = mutators
 
-properties
-    A set of properties as JSON. Can accept integers, strings, booleans and lists.
-
-
-Optional parameters
--------------------
-
-instance
-    The name of the instance that will run the script. Default: instance
-
-zeoserver
-    The name of the zeoserver part that should be used.  This is only required if you are using a zope/zeo setup. Default: not set
+Again, these are set at the same time as the portal properties are applied
+and as GenericSetup is run - no extra zope invocations are required.
 
 
-Running commands
-================
+The migration script
+====================
 
-This recipe lets you run a script against a Plone site as part of a buildout run.
+If you have a plonesite:site stanza in your buildout you will get a plonesite
+script in your bin directory.
 
-To use this, add something like this to your recipe::
+Running this script with no arguments will apply run the same processes that
+run during buildout.
 
-    [runscript]
-    recipe = isotoma.recipe.plonetools:script
-    command = /path/to/script.py --site-id=Plone --other-param=${foo:bar}
-
-Mandatory parameters
---------------------
-
-command
-    The script to execute, and the arguments to pass to it
-
-
-Optional parameters
--------------------
-
-instance
-    The name of the instance that will run the script. Default: instance
-
-zeoserver
-    The name of the zeoserver part that should be used.  This is only required if you are using a zope/zeo setup. Default: not set
+Running the script with the ``-r`` argument will cause it to rebuild the site,
+deleting your Plone site object and recreating it. Great for sandboxes that
+reset nightly.
 
 
 Creating wrapper scripts
 ========================
 
-This recipe lets you create a script in your buildouts bin-directory to run a script for you under the correct
-zope instance.
+This recipe lets you create a script in your buildouts bin-directory to run a
+script for you under the correct zope instance.
 
 If you have a script in mypackage.myscript::
 
