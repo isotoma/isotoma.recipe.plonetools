@@ -1,7 +1,7 @@
 Changelog
 =========
 
-0.0.11 (unreleased)
+0.0.11 (2011-09-22)
 -------------------
 
 - The properties and script helper are no longer supported
