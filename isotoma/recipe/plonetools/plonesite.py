@@ -17,10 +17,6 @@ try:
 except ImportError:
     import simplejson as json
 
-try:
-    from Products.PloneTestCase import version
-except ImportError:
-    version = None
 pre_plone3 = False
 try:
     from plone.app.linkintegrity.exceptions import \
@@ -38,6 +34,14 @@ try:
     from ZODB.POSException import ConflictError
 except ImportError:
     ConflictError = None
+
+def has_factory_addPloneSite():
+    try:
+        from Products.CMFPlone.factory import addPloneSite
+        addPloneSite  # please pyflakes
+        return True
+    except ImportError:
+        return False
 
 
 def deserialize(val):
@@ -86,8 +90,14 @@ class Plonesite(object):
         for profile in profiles:
             if not profile.startswith('profile-'):
                 profile = "profile-%s" % profile
+
             print "Running profile: %s" % profile
-            stool.runAllImportStepsFromProfile(profile)
+            if pre_plone3:
+                stool.setImportContext(profile)
+                stool.runAllImportSteps()
+            else:
+                stool.runAllImportStepsFromProfile(profile)
+
             transaction.savepoint()
 
     def quickinstall(self, plone, products):
@@ -128,7 +138,7 @@ class Plonesite(object):
                 return
         # actually add in Plone
         if site_id not in oids:
-            if version is not None and version.PLONE40:
+            if has_factory_addPloneSite():
                 # we have to simulate the new zmi admin screen here - at
                 # least provide:
                 # extension_ids
@@ -153,6 +163,12 @@ class Plonesite(object):
 
         # install some products
         plone = getattr(app, site_id)
+
+        # set the site so that the component architecture will work
+        # properly
+        if not pre_plone3:
+            setSite(plone)
+
         if plone:
             self.quickinstall(plone, products_initial)
         # run GS profiles
@@ -254,6 +270,15 @@ class Plonesite(object):
 
     def run(self, app):
         app = makerequest.makerequest(app)
+
+        try:
+            from zope.globalrequest import setRequest
+            # support plone.subrequest
+            app.REQUEST['PARENTS'] = [app]
+            setRequest(app.REQUEST)
+        except ImportError:
+            pass
+
         # set up security manager
         acl_users = app.acl_users
         user = acl_users.getUser(self.admin_user)
@@ -275,7 +300,8 @@ class Plonesite(object):
 
         # set the site so that the component architecture will work
         # properly
-        setSite(portal)
+        if not pre_plone3:
+            setSite(portal)
 
         def runExtras(portal, script_path):
             if not os.path.exists(script_path):
