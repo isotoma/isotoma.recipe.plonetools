@@ -220,26 +220,18 @@ class Site(Recipe):
 
     def write_script(self, name, cfgpath):
         instance_script = os.path.join(self.buildout["buildout"]["bin-directory"], self.options.get("instance", "instance"))
+        first_line = "#! %s run\n" % instance_script
 
         script = os.path.join(self.buildout['buildout']['bin-directory'], name)
         print "Generating wrapper: %s" % script
 
+        # To get around this recipe not being on sys.path for bin/instance lets just copy the script
+        # into bin instance, but point it at a sensible config file by default
+        body = open(os.path.join(os.path.dirname(__file__), "plonesite.py")).read()
+        body = first_line + body.replace("Plonesite.main(app)", "Plonesite.main(app,'%s')" % cfgpath)
+
         f = open(script, "w")
-
-        template = "#! %(instance_script)s run\n" + \
-            "import sys\n" + \
-            "sys.path.insert(0, '%(path)s')\n" + \
-            "import %(module)s\n" + \
-            "if __name__ == '__main__':\n" + \
-            "    %(module)s.%(func)s(%(args)s)\n\n"
-
-        f.write(template % {
-            "path": os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')),
-            "instance_script": instance_script,
-            "module": "isotoma.recipe.plonetools",
-            "func": "Plonesite.main",
-            "args": "args, '%s'" % cfgpath,
-            })
+        f.write(body)
         f.close()
 
         os.chmod(script, 0755)
