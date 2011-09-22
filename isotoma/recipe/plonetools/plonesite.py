@@ -1,4 +1,4 @@
-import os
+import os, sys
 from datetime import datetime
 from zope.app.component.hooks import setSite
 import zc.buildout
@@ -278,11 +278,11 @@ class Plonesite(object):
         setSite(portal)
 
         def runExtras(portal, script_path):
-            if os.path.exists(script_path):
-                execfile(script_path)
-            else:
+            if not os.path.exists(script_path):
                 msg = 'The path to the extras script does not exist: %s'
                 raise zc.buildout.UserError(msg % script_path)
+            print "Running extra:", script_path
+            execfile(script_path, {"app": app, "portal": portal})
 
         for pre_extra in self.pre_extras:
             runExtras(portal, pre_extra)
@@ -346,13 +346,15 @@ class Plonesite(object):
             self.attempts = cfg.getint("main", "attempts")
 
     @classmethod
-    def main(cls, app):
+    def main(cls, app, config=None):
         parser = OptionParser()
-        parser.add_option("-c", "--config")
+        parser.add_option("-c", "--config", default=config)
+        parser.add_option("-r", "--replace", action="store_true")
         options, args = parser.parse_args()
 
         p = cls()
         p.configure_from_file(options.config)
+        p.site_replace = options.replace
 
         for i in range(int(p.attempts)):
             try:

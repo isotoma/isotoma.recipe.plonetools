@@ -214,7 +214,37 @@ class Site(Recipe):
 
         config.write(open(cfgpath, 'wb'))
 
+        self.write_script(self.name, cfgpath)
+
         return cfgpath
+
+    def write_script(self, name, cfgpath):
+        instance_script = os.path.join(self.buildout["buildout"]["bin-directory"], self.options.get("instance", "instance"))
+
+        script = os.path.join(self.buildout['buildout']['bin-directory'], name)
+        print "Generating wrapper: %s" % script
+
+        f = open(script, "w")
+
+        template = "#! %(instance_script)s run\n" + \
+            "import sys\n" + \
+            "sys.path.insert(0, '%(path)s')\n" + \
+            "import %(module)s\n" + \
+            "if __name__ == '__main__':\n" + \
+            "    %(module)s.%(func)s(%(args)s)\n\n"
+
+        f.write(template % {
+            "path": os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')),
+            "instance_script": instance_script,
+            "module": "isotoma.recipe.plonetools",
+            "func": "Plonesite.main",
+            "args": "args, '%s'" % cfgpath,
+            })
+        f.close()
+
+        os.chmod(script, 0755)
+
+        self.installed.append(script)
 
     def get_command(self):
         args = ["-c", self.write_plonesite_cfg()]
@@ -222,17 +252,6 @@ class Site(Recipe):
             "scriptname": self.get_internal_script("plonesite.py"),
             "args": " ".join(args)
             }
-
-
-class Script(Recipe):
-
-    """
-    The script recipe takes a 'command' parameter: this is what to tell the
-    instance script to run
-    """
-
-    def get_command(self):
-        return self.options["command"]
 
 
 class Wrapper(object):

@@ -34,7 +34,6 @@ setup(
         "zc.buildout": [
             "default = isotoma.recipe.plonetools:Site",
             "site = isotoma.recipe.plonetools:Site",
-            "script = isotoma.recipe.plonetools:Script",
             "wrapper = isotoma.recipe.plonetools:Wrapper",
         ],
     }
