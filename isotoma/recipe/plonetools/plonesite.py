@@ -369,6 +369,16 @@ class Plonesite(object):
             else:
                 break
 
+        # Make sure worker threads are killed off
+        try:
+            from Products.CMFSquidTool.utils import stopThreads
+            print "Stopping CMFSquidTool purge queue..."
+            stopThreads()
+
+        except ImportError:
+            # Import error means no CacheSetup; so dont worry
+            pass
+
 if __name__ == '__main__':
     Plonesite.main(app)
 
