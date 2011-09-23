@@ -9,6 +9,8 @@ from Testing import makerequest
 from optparse import OptionParser
 import ConfigParser
 
+from Products.CMFPlone.utils import getFSVersionTuple
+
 from Products.ZODBMountPoint.MountedObject import manage_addMounts
 from Products.ZODBMountPoint.MountedObject import manage_getMountStatus
 
@@ -136,9 +138,15 @@ class Plonesite(object):
             else:
                 print "A Plone Site already exists and will not be replaced"
                 return
+
         # actually add in Plone
         if site_id not in oids:
-            if has_factory_addPloneSite():
+            version = getFSVersionTuple()
+            if version[0] < 4:
+                factory = app.manage_addProduct['CMFPlone']
+                factory.addPloneSite(site_id, create_userfolder=1)
+
+            else:
                 # we have to simulate the new zmi admin screen here - at
                 # least provide:
                 # extension_ids
@@ -154,9 +162,7 @@ class Plonesite(object):
                     extension_ids=extension_profiles,
                     setup_content=False
                     )
-            else:
-                factory = app.manage_addProduct['CMFPlone']
-                factory.addPloneSite(site_id, create_userfolder=1)
+
             # commit the new site to the database
             transaction.commit()
             print "Added Plone Site"
@@ -352,7 +358,7 @@ class Plonesite(object):
             self.products_initial = self.getProductsWithSpace(cfg.get("main", "products-initial").strip().split())
         if cfg.has_option("main", "products"):
             self.products = self.getProductsWithSpace(cfg.get("main", "products").strip().split())
-        if cfg.has_option("main", "profiles-intial"):
+        if cfg.has_option("main", "profiles-initial"):
             self.profiles_initial = self.getProductsWithSpace(cfg.get("main", "profiles-initial").strip().split())
         if cfg.has_option("main", "profiles"):
             self.profiles = self.getProductsWithSpace(cfg.get("main", "profiles").strip().split())
