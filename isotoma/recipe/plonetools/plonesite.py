@@ -14,6 +14,9 @@ from Products.CMFPlone.utils import getFSVersionTuple
 from Products.ZODBMountPoint.MountedObject import manage_addMounts
 from Products.ZODBMountPoint.MountedObject import manage_getMountStatus
 
+from Products.SiteAccess.AccessRule import manage_addAccessRule, getAccessRule
+from Products.SiteAccess.SiteRoot import manage_addSiteRoot
+
 try:
     import json
 except ImportError:
@@ -79,6 +82,7 @@ class Plonesite(object):
         self.profiles = []
 
         self.in_mountpoint = None
+        self.rootify = False
 
         self.properties = {}
         self.mutators = {}
@@ -274,6 +278,38 @@ class Plonesite(object):
 
         transaction.savepoint()
 
+    def rootify_site(self, app, portal):
+        print "Ensuring site is visible at '/'"
+
+        if not "rootify" in app.objectIds():
+            print "    Adding DTMLMethod 'rootify'..."
+            app.addDTMLMethod('rootify', file="""
+              <dtml-let stack="REQUEST['TraversalRequestNameStack']">
+                <dtml-if "stack and stack[-1]=='zmi'">
+                  <dtml-call "stack.pop()">
+                  <dtml-call "REQUEST.setVirtualRoot('zmi')">
+                <dtml-else>
+                  <dtml-call "stack.append('%s')">
+                </dtml-if>
+              </dtml-let>
+              """ % portal.getId())
+        else:
+            print "    Skipped adding DTMLMethod."
+
+        if getAccessRule(app) != "rootify":
+            print "    Adding AccessRule..."
+            manage_addAccessRule(app, "rootify")
+        else:
+            print "    Skipped adding AccessRule."
+
+        if not "SiteRoot" in portal.objectIds():
+            print "    Adding SiteRoot..."
+            manage_addSiteRoot(portal, title="SiteRoot", base="", path="/")
+        else:
+            print "    Skipped adding SiteRoot."
+
+        transaction.savepoint()
+
     def run(self, app):
         app = makerequest.makerequest(app)
 
@@ -331,6 +367,9 @@ class Plonesite(object):
         if self.mutators:
             self.set_mutators(portal, self.mutators)
 
+        if self.rootify:
+            self.rootify_site(app, portal)
+
         for post_extra in self.post_extras:
             runExtras(portal, post_extra)
 
@@ -344,9 +383,20 @@ class Plonesite(object):
 
         cfg.read(path)
 
-        self.site_id = cfg.get("main", "site-id")
-        self.site_replace = cfg.getboolean("main", "site-replace")
-        self.admin_user = cfg.get("main", "admin-user")
+        if cfg.has_option("main", "site-id"):
+            self.site_id = cfg.get("main", "site-id")
+        else:
+            self.site_id = "Plone"
+
+        if cfg.has_option("main", "site-replace"):
+            self.site_replace = cfg.getboolean("main", "site-replace")
+        else:
+            self.site_replace = False
+
+        if cfg.has_option("main", "admin-user"):
+            self.admin_user = cfg.get("main", "admin-user")
+        else:
+            self.admin_user = "admin"
 
         if cfg.has_option("main", "post-extras"):
             self.post_extras = cfg.get("main", "post-extras").strip().split()
@@ -365,6 +415,11 @@ class Plonesite(object):
 
         if cfg.has_option("main", "in_mountpoint"):
             self.in_mountpoint = options.in_mountpoint
+
+        if cfg.has_option("main", "rootify") and cfg.getboolean("main", "rootify"):
+            self.rootify = True
+        else:
+            self.rootify = False
 
         if cfg.has_section("properties"):
             for k, v in cfg.items("properties"):

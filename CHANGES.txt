@@ -4,7 +4,7 @@ Changelog
 0.0.13 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Add a new 'rootify' option. It's only available to virtualenv peeps atm.
 
 
 0.0.12 (2011-09-23)
