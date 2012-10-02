@@ -4,7 +4,7 @@ Changelog
 0.0.14 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Automatic migration to split Data.fs when mount points are declared in zope.conf
 
 
 0.0.13 (2011-09-29)
