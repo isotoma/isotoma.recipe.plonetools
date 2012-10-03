@@ -11,11 +11,83 @@ import ConfigParser
 
 from Products.CMFPlone.utils import getFSVersionTuple
 
-from Products.ZODBMountPoint.MountedObject import manage_addMounts
-from Products.ZODBMountPoint.MountedObject import manage_getMountStatus
+from Products.ZODBMountPoint.MountedObject import manage_addMounts, \
+    manage_getMountStatus, setMountPoint, MountedObject, CustomTrailblazer
 
 from Products.SiteAccess.AccessRule import manage_addAccessRule, getAccessRule
 from Products.SiteAccess.SiteRoot import manage_addSiteRoot
+
+import tempfile
+from App.config import getConfiguration
+
+
+def migrate_mount_points(portal):
+    # Based on a script by Andrew Mleczko
+    # http://plone.org/documentation/kb/migrating-an-existing-catalog-in-a-new-zodb
+
+    portal_path = portal.absolute_url_path() + "/"
+
+    for mp in manage_getMountStatus(portal):
+        if not mp['path'].startswith(portal_path):
+            continue
+
+        if not '** Something is in the way **' in mp['status']:
+            continue
+
+        print "Migrating '%s' to seperate ZODB storage" % mp['path']
+
+        path = mp['path']
+        id = path.split("/")[-1]
+
+        # Existing objects
+        old_obj = portal.unrestrictedTraverse(path)
+        old_parent = old_obj.aq_parent.aq_base
+
+        # New storage from the item
+        db_name = mp['name']
+        db = getConfiguration().dbtab.getDatabase(path)
+        new_trans = db.open()
+
+        # Try to get the root of the new storage
+        root_dict = new_trans.root()
+        if not root_dict.has_key('Application'):
+            from OFS.Application import Application
+            root_dict['Application'] = Application()
+            transaction.savepoint(optimistic=True)
+
+        # Verify there nothing in the way
+        root = root_dict['Application']
+        if id in root:
+            print "  Cleaning target ZODB storage"
+            root.manage_delObjects([id])
+
+        print "  Exporting current state..."
+        f = tempfile.TemporaryFile()
+        old_obj._p_jar.exportFile(old_obj._p_oid, f)
+        f.seek(0)
+
+        print "  Importing into new external ZODB storage..."
+        new_obj = root._p_jar.importFile(f)
+        f.close()
+        transaction.savepoint(optimistic=True)
+
+        print "  Set the new object in the new storage..."
+        blazer = CustomTrailblazer(root)
+        obj = blazer.traverseOrConstruct(path)
+        obj.aq_parent._setOb(id, new_obj)
+
+        print "  Activating the new external storage..."
+        mo = MountedObject(path)
+        mo._create_mount_points = True
+
+        old_parent._p_jar.add(mo)
+        old_parent._setOb(id, mo)
+        setMountPoint(old_parent, id, mo)
+
+        transaction.savepoint(optimistic=True)
+
+    transaction.commit()
+
 
 try:
     import json
@@ -141,7 +213,7 @@ class Plonesite(object):
                 oids = app.objectIds()
             else:
                 print "A Plone Site already exists and will not be replaced"
-                return
+                return False
 
         # actually add in Plone
         if site_id not in oids:
@@ -171,19 +243,7 @@ class Plonesite(object):
             transaction.commit()
             print "Added Plone Site"
 
-        # install some products
-        plone = getattr(app, site_id)
-
-        # set the site so that the component architecture will work
-        # properly
-        if not pre_plone3:
-            setSite(plone)
-
-        if plone:
-            self.quickinstall(plone, products_initial)
-        # run GS profiles
-            self.runProfiles(plone, profiles_initial)
-        print "Finished"
+            return True
 
     def retryable(self, error_type, error):
         """
@@ -337,13 +397,20 @@ class Plonesite(object):
             plonesite_parent = prepare_mountpoint(app, self.in_mountpoint)
 
         # create the plone site if it doesn't exist
-        self.create(plonesite_parent, self.site_id, self.products_initial, self.profiles_initial, self.site_replace)
+        created_new_site = self.create(plonesite_parent, self.site_id, self.products_initial, self.profiles_initial, self.site_replace)
         portal = getattr(plonesite_parent, self.site_id)
 
         # set the site so that the component architecture will work
         # properly
         if not pre_plone3:
             setSite(portal)
+
+        migrate_mount_points(portal)
+
+        if created_new_site:
+            self.quickinstall(portal, products_initial)
+            # run GS profiles
+            self.runProfiles(portal, profiles_initial)
 
         def runExtras(portal, script_path):
             if not os.path.exists(script_path):
@@ -376,6 +443,8 @@ class Plonesite(object):
         # commit the transaction
         transaction.commit()
         noSecurityManager()
+
+        print "Finished"
 
     def configure_from_file(self, path):
         cfg = ConfigParser.RawConfigParser()
