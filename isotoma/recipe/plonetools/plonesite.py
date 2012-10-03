@@ -408,9 +408,9 @@ class Plonesite(object):
         migrate_mount_points(portal)
 
         if created_new_site:
-            self.quickinstall(plone, products_initial)
+            self.quickinstall(portal, products_initial)
             # run GS profiles
-            self.runProfiles(plone, profiles_initial)
+            self.runProfiles(portal, profiles_initial)
 
         def runExtras(portal, script_path):
             if not os.path.exists(script_path):
