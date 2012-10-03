@@ -25,8 +25,6 @@ def migrate_mount_points(portal):
     # Based on a script by Andrew Mleczko
     # http://plone.org/documentation/kb/migrating-an-existing-catalog-in-a-new-zodb
 
-    _MARKER = "MARK"
-
     for mp in manage_getMountStatus(portal):
         if not '** Something is in the way **' in mp['status']:
             continue
@@ -54,12 +52,13 @@ def migrate_mount_points(portal):
 
         # Verify there nothing in the way
         root = root_dict['Application']
-        if root.get(id, _MARKER) is not _MARKER:
+        if id in root:
+            print "  Cleaning target ZODB storage"
             root.manage_delObjects([id])
 
         print "  Exporting current state..."
-        f=tempfile.TemporaryFile()
-        old_obj._p_jar.exportFile(old_obj._p_oid,f)
+        f = tempfile.TemporaryFile()
+        old_obj._p_jar.exportFile(old_obj._p_oid, f)
         f.seek(0)
 
         print "  Importing into new external ZODB storage..."
