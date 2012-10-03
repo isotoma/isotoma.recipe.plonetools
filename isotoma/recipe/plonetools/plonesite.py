@@ -25,7 +25,12 @@ def migrate_mount_points(portal):
     # Based on a script by Andrew Mleczko
     # http://plone.org/documentation/kb/migrating-an-existing-catalog-in-a-new-zodb
 
+    portal_path = portal.absolute_url_path() + "/"
+
     for mp in manage_getMountStatus(portal):
+        if not mp['path'].startswith(portal_path):
+            continue
+
         if not '** Something is in the way **' in mp['status']:
             continue
 
