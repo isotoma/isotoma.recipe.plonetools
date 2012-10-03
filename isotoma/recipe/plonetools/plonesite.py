@@ -82,6 +82,8 @@ def migrate_mount_points(portal):
 
         transaction.savepoint(optimistic=True)
 
+    transaction.commit()
+
 
 try:
     import json
@@ -207,7 +209,7 @@ class Plonesite(object):
                 oids = app.objectIds()
             else:
                 print "A Plone Site already exists and will not be replaced"
-                return
+                return False
 
         # actually add in Plone
         if site_id not in oids:
@@ -237,23 +239,7 @@ class Plonesite(object):
             transaction.commit()
             print "Added Plone Site"
 
-        # install some products
-        plone = getattr(app, site_id)
-
-        # set the site so that the component architecture will work
-        # properly
-        if not pre_plone3:
-            setSite(plone)
-
-        migrate_mount_points(plone)
-        transaction.commit()
-
-        if plone:
-            self.quickinstall(plone, products_initial)
-            # run GS profiles
-            self.runProfiles(plone, profiles_initial)
-
-        print "Finished"
+            return True
 
     def retryable(self, error_type, error):
         """
@@ -407,7 +393,7 @@ class Plonesite(object):
             plonesite_parent = prepare_mountpoint(app, self.in_mountpoint)
 
         # create the plone site if it doesn't exist
-        self.create(plonesite_parent, self.site_id, self.products_initial, self.profiles_initial, self.site_replace)
+        created_new_site = self.create(plonesite_parent, self.site_id, self.products_initial, self.profiles_initial, self.site_replace)
         portal = getattr(plonesite_parent, self.site_id)
 
         # set the site so that the component architecture will work
@@ -416,6 +402,11 @@ class Plonesite(object):
             setSite(portal)
 
         migrate_mount_points(portal)
+
+        if created_new_site:
+            self.quickinstall(plone, products_initial)
+            # run GS profiles
+            self.runProfiles(plone, profiles_initial)
 
         def runExtras(portal, script_path):
             if not os.path.exists(script_path):
@@ -448,6 +439,8 @@ class Plonesite(object):
         # commit the transaction
         transaction.commit()
         noSecurityManager()
+
+        print "Finished"
 
     def configure_from_file(self, path):
         cfg = ConfigParser.RawConfigParser()
