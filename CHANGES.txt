@@ -4,7 +4,7 @@ Changelog
 0.0.15 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Fix regression in migrate script.
 
 
 0.0.14 (2012-10-03)

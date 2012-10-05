@@ -197,7 +197,7 @@ class Plonesite(object):
                 qit.installProducts([p])
                 transaction.savepoint()
 
-    def create(self, app, site_id, products_initial, profiles_initial, site_replace):
+    def create(self, app, site_id, site_replace):
         oids = app.objectIds()
         if site_id in oids:
             if site_replace and hasattr(app, site_id):
@@ -397,7 +397,7 @@ class Plonesite(object):
             plonesite_parent = prepare_mountpoint(app, self.in_mountpoint)
 
         # create the plone site if it doesn't exist
-        created_new_site = self.create(plonesite_parent, self.site_id, self.products_initial, self.profiles_initial, self.site_replace)
+        created_new_site = self.create(plonesite_parent, self.site_id, self.site_replace)
         portal = getattr(plonesite_parent, self.site_id)
 
         # set the site so that the component architecture will work
@@ -408,9 +408,9 @@ class Plonesite(object):
         migrate_mount_points(portal)
 
         if created_new_site:
-            self.quickinstall(portal, products_initial)
+            self.quickinstall(portal, self.products_initial)
             # run GS profiles
-            self.runProfiles(portal, profiles_initial)
+            self.runProfiles(portal, self.profiles_initial)
 
         def runExtras(portal, script_path):
             if not os.path.exists(script_path):
