@@ -1,7 +1,7 @@
 Changelog
 =========
 
-0.0.15 (unreleased)
+0.0.15 (2012-10-05)
 -------------------
 
 - Fix regression in migrate script.
