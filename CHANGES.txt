@@ -4,7 +4,14 @@ Changelog
 0.0.16 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- The most sensible process is:
+
+    * Create empty site
+    * Run initial profiles
+    * Run main profiles
+    * Migrate mount points
+
+  I think.
 
 
 0.0.15 (2012-10-05)

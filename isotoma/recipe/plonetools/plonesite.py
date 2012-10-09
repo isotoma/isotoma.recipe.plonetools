@@ -405,7 +405,6 @@ class Plonesite(object):
         if not pre_plone3:
             setSite(portal)
 
-        migrate_mount_points(portal)
 
         if created_new_site:
             self.quickinstall(portal, self.products_initial)
@@ -440,8 +439,10 @@ class Plonesite(object):
         for post_extra in self.post_extras:
             runExtras(portal, post_extra)
 
-        # commit the transaction
         transaction.commit()
+
+        migrate_mount_points(portal)
+
         noSecurityManager()
 
         print "Finished"
