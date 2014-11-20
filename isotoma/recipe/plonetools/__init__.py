@@ -129,7 +129,9 @@ class Recipe(object):
                     }
 
                 # run the script
-                result = subprocess.call(shlex.split(cmd))
+                env = dict(os.environ.items())
+                del env['PYTHONPATH']
+                result = subprocess.call(shlex.split(cmd), env=env)
                 if result > 0:
                     raise UserError("Plone script could not complete")
             finally:
