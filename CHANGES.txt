@@ -4,7 +4,7 @@ Changelog
 0.0.17 (unreleased)
 -------------------
 
-- Nothing changed yet.
+- Ignore existing PYTHPONPATH when calling sub-scripts.
 
 
 0.0.16 (2012-10-09)
